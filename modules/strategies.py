@@ -861,11 +861,11 @@ class TradingStrategy:
         with priority-based decision making and comprehensive validation.
         
         Signal Priority Order:
-        1. V-shaped reversal signals (highest priority - extreme conditions)
-        2. Squeeze breakout signals (high priority - volatility breakouts)
-        3. Market condition specific signals (medium priority - trend following)
-        4. Extreme market signals (lower priority - specialized conditions)
-        5. Institutional order flow signals (integrates with other signals)
+        1. Squeeze breakout signals (HIGHEST PRIORITY - volatility breakouts)
+        2. V-shaped reversal signals (high priority - extreme conditions)
+        3. Institutional order flow signals (high priority - smart money)
+        4. Market condition specific signals (medium priority - trend following)
+        5. Extreme market signals (lower priority - specialized conditions)
         
         Returns: 'BUY', 'SELL', or None
         """
@@ -898,24 +898,24 @@ class TradingStrategy:
             # Initialize signal candidates with their priority scores
             signal_candidates = []
             
-            # === PRIORITY 1: V-shaped reversal signals (Emergency/Extreme conditions) ===
-            v_reversal_signal = self.get_v_reversal_signal(df)
-            if v_reversal_signal:
-                signal_candidates.append({
-                    'signal': v_reversal_signal,
-                    'priority': 1,
-                    'confidence': 0.9,
-                    'source': 'v_reversal'
-                })
-            
-            # === PRIORITY 2: Squeeze breakout signals (High volatility events) ===
+            # === PRIORITY 1: Squeeze breakout signals (HIGHEST PRIORITY - High volatility breakouts) ===
             squeeze_signal = self.get_squeeze_breakout_signal(df)
             if squeeze_signal:
                 signal_candidates.append({
                     'signal': squeeze_signal,
+                    'priority': 1,
+                    'confidence': 0.9,
+                    'source': 'squeeze_breakout'
+                })
+            
+            # === PRIORITY 2: V-shaped reversal signals (Emergency/Extreme conditions) ===
+            v_reversal_signal = self.get_v_reversal_signal(df)
+            if v_reversal_signal:
+                signal_candidates.append({
+                    'signal': v_reversal_signal,
                     'priority': 2,
                     'confidence': 0.85,
-                    'source': 'squeeze_breakout'
+                    'source': 'v_reversal'
                 })
             
             # === PRIORITY 3: Institutional order flow signals ===
@@ -923,12 +923,12 @@ class TradingStrategy:
             if institutional_signal:
                 signal_candidates.append({
                     'signal': institutional_signal,
-                    'priority': 2,  # Same priority as squeeze signals
-                    'confidence': 0.85,
+                    'priority': 3,
+                    'confidence': 0.8,
                     'source': 'institutional_flow'
                 })
             
-            # === PRIORITY 3: Market condition specific signals ===
+            # === PRIORITY 4: Market condition specific signals ===
             condition_signal = None
             if market_condition == 'SIDEWAYS':
                 condition_signal = self.get_sideways_signal(df)
@@ -940,17 +940,17 @@ class TradingStrategy:
             if condition_signal:
                 signal_candidates.append({
                     'signal': condition_signal,
-                    'priority': 3,
+                    'priority': 4,
                     'confidence': 0.7,
                     'source': 'market_condition'
                 })
             
-            # === PRIORITY 4: Extreme market signals (Specialized conditions) ===
+            # === PRIORITY 5: Extreme market signals (Specialized conditions) ===
             extreme_signal = self.get_extreme_market_signal(df)
             if extreme_signal:
                 signal_candidates.append({
                     'signal': extreme_signal,
-                    'priority': 4,
+                    'priority': 5,
                     'confidence': 0.6,
                     'source': 'extreme_market'
                 })
@@ -2298,25 +2298,79 @@ class DynamicStrategy(TradingStrategy):
     
     def get_squeeze_breakout_signal(self, df):
         """
-        Detect breakouts from low-volatility squeeze conditions
+        Enhanced squeeze breakout detection - HIGHEST PRIORITY SIGNAL
+        Detects breakouts from low-volatility squeeze conditions with multiple confirmations
         """
-        if len(df) < 5:
+        if len(df) < 10:
             return None
             
         latest = df.iloc[-1]
         prev = df.iloc[-2]
+        prev2 = df.iloc[-3] if len(df) > 3 else None
         market_condition = latest['market_condition']
         
-        # Only look for breakout if we're in or just exited a squeeze
-        if market_condition != 'SQUEEZE' and prev['market_condition'] != 'SQUEEZE':
+        # Check if we're in or just exited a squeeze condition
+        in_squeeze = market_condition == 'SQUEEZE'
+        exited_squeeze = prev['market_condition'] == 'SQUEEZE' and market_condition != 'SQUEEZE'
+        
+        if not (in_squeeze or exited_squeeze):
             return None
             
-        # Volume spike indicates breakout
-        if latest['volume_ratio'] > 1.5:
-            # Direction of breakout
-            if latest['close'] > latest['bb_upper']:
+        # Enhanced breakout confirmation criteria
+        volume_spike = latest['volume_ratio'] > 1.5
+        strong_volume_spike = latest['volume_ratio'] > 2.0
+        
+        # Bollinger Band breakout
+        upper_breakout = latest['close'] > latest['bb_upper']
+        lower_breakout = latest['close'] < latest['bb_lower']
+        
+        # Additional momentum confirmations
+        rsi_momentum = False
+        macd_momentum = False
+        supertrend_alignment = False
+        
+        if upper_breakout:  # Bullish breakout
+            rsi_momentum = latest['rsi'] > 50 and latest['rsi'] < 80  # Not overbought
+            if 'macd_diff' in df.columns:
+                macd_momentum = latest['macd_diff'] > 0  # MACD histogram positive
+            if 'supertrend_direction' in df.columns:
+                supertrend_alignment = latest['supertrend_direction'] >= 0  # Supertrend bullish/neutral
+                
+        elif lower_breakout:  # Bearish breakout
+            rsi_momentum = latest['rsi'] < 50 and latest['rsi'] > 20  # Not oversold
+            if 'macd_diff' in df.columns:
+                macd_momentum = latest['macd_diff'] < 0  # MACD histogram negative
+            if 'supertrend_direction' in df.columns:
+                supertrend_alignment = latest['supertrend_direction'] <= 0  # Supertrend bearish/neutral
+        
+        # Price momentum (breaking out with conviction)
+        price_momentum = False
+        if prev2 is not None:
+            recent_range = max(df['high'].iloc[-3:]) - min(df['low'].iloc[-3:])
+            current_move = abs(latest['close'] - prev['close'])
+            price_momentum = current_move > (recent_range * 0.3)  # Strong price move
+        
+        # VWAP confirmation
+        vwap_confirmation = False
+        if 'vwap' in df.columns:
+            if upper_breakout:
+                vwap_confirmation = latest['close'] > latest['vwap']
+            elif lower_breakout:
+                vwap_confirmation = latest['close'] < latest['vwap']
+        
+        # Generate signal with multiple confirmations
+        if upper_breakout and volume_spike:
+            confirmations = sum([rsi_momentum, macd_momentum, supertrend_alignment, price_momentum, vwap_confirmation])
+            
+            if strong_volume_spike or confirmations >= 2:
+                logger.info(f"Squeeze Breakout BUY - Volume: {latest['volume_ratio']:.2f}x, Confirmations: {confirmations}/5")
                 return 'BUY'
-            elif latest['close'] < latest['bb_lower']:
+                
+        elif lower_breakout and volume_spike:
+            confirmations = sum([rsi_momentum, macd_momentum, supertrend_alignment, price_momentum, vwap_confirmation])
+
+            if strong_volume_spike or confirmations >= 2:
+                logger.info(f"Squeeze Breakout SELL - Volume: {latest['volume_ratio']:.2f}x, Confirmations: {confirmations}/5")
                 return 'SELL'
                 
         return None
