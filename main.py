@@ -542,10 +542,10 @@ def on_order_update(order_data):
                     logger.info(f"🟢🟢🟢 EXECUTED {side} ORDER: {filled_qty} {symbol} @ {price} 🟢🟢🟢")
                 else:
                     logger.info(f"🔴🔴🔴 EXECUTED {side} ORDER: {filled_qty} {symbol} @ {price} 🔴🔴🔴")
-            elif order_type in ['STOP_MARKET', 'TAKE_PROFIT_MARKET']:
+            elif order_type in ['STOP_MARKET']:
                 logger.info(f"⚠️⚠️⚠️ EXECUTED {order_type} {side} ORDER: {filled_qty} {symbol} @ {price} ⚠️⚠️⚠️")
                 
-                # Check if we need to cancel any remaining orders after a stop or take profit is hit
+                # Check if we need to cancel any remaining orders after a stop loss is hit
                 try:
                     position = binance_client.get_position_info(symbol)
                     # If position was closed or is very small (dust)
@@ -666,9 +666,9 @@ def on_order_update(order_data):
                 except Exception as chart_error:
                     logger.error(f"Error generating trade chart: {chart_error}")
                     
-            elif order_type in ['STOP_MARKET', 'TAKE_PROFIT_MARKET']:
-                # For stop loss or take profit orders, send a special notification
-                event_type = "Stop Loss" if order_type == 'STOP_MARKET' else "Take Profit"
+            elif order_type in ['STOP_MARKET']:
+                # For stop loss orders only (take profit functionality removed)
+                event_type = "Stop Loss"
                 
                 # Calculate profit/loss if available
                 profit_loss_msg = ""
@@ -833,7 +833,7 @@ def check_for_signals(symbol=None):
                         # Get recent klines for volatility calculation
                         recent_klines = klines_data.get(symbol, [])[-30:] if klines_data.get(symbol) else None
                         
-                        # Place protective stop loss using volatility-based calculation
+                        # Only place protective stop loss (take profit disabled)
                         stop_loss_price = risk_manager.calculate_volatility_based_stop_loss(
                             symbol, "BUY", entry_price, recent_klines
                         )
@@ -846,26 +846,6 @@ def check_for_signals(symbol=None):
                                 logger.info(f"✅ Volatility-based stop loss placed at {stop_loss_price}")
                             else:
                                 logger.error(f"❌ Failed to place stop loss at {stop_loss_price}")
-                        
-                        # Place partial take profits instead of a single take profit
-                        tp_orders = place_partial_take_profits(
-                            symbol, "BUY", position_amount, entry_price, new_position
-                        )
-                        
-                        if tp_orders:
-                            logger.info(f"✅ Successfully placed {len(tp_orders)} partial take profit orders")
-                        else:
-                            # Fallback to regular take profit if partial TP failed
-                            logger.warning("⚠️ Partial take profits failed, trying regular take profit")
-                            take_profit_price = risk_manager.calculate_take_profit(symbol, "BUY", entry_price)
-                            if take_profit_price:
-                                tp_order = binance_client.place_take_profit_order(
-                                    symbol, "SELL", position_amount, take_profit_price
-                                )
-                                if tp_order:
-                                    logger.info(f"✅ Take profit placed at {take_profit_price}")
-                                else:
-                                    logger.error(f"❌ Failed to place take profit at {take_profit_price}")
                                     
                     except Exception as e:
                         logger.error(f"❌ Error placing protective orders: {e}")
@@ -966,7 +946,7 @@ def check_for_signals(symbol=None):
                         # Get recent klines for volatility calculation
                         recent_klines = klines_data.get(symbol, [])[-30:] if klines_data.get(symbol) else None
                         
-                        # Place protective stop loss using volatility-based calculation
+                        # Only place protective stop loss (take profit disabled)
                         stop_loss_price = risk_manager.calculate_volatility_based_stop_loss(
                             symbol, "SELL", entry_price, recent_klines
                         )
@@ -979,26 +959,6 @@ def check_for_signals(symbol=None):
                                 logger.info(f"✅ Volatility-based stop loss placed at {stop_loss_price}")
                             else:
                                 logger.error(f"❌ Failed to place stop loss at {stop_loss_price}")
-                        
-                        # Place partial take profits instead of a single take profit
-                        tp_orders = place_partial_take_profits(
-                            symbol, "SELL", position_amount, entry_price, new_position
-                        )
-                        
-                        if tp_orders:
-                            logger.info(f"✅ Successfully placed {len(tp_orders)} partial take profit orders")
-                        else:
-                            # Fallback to regular take profit if partial TP failed
-                            logger.warning("⚠️ Partial take profits failed, trying regular take profit")
-                            take_profit_price = risk_manager.calculate_take_profit(symbol, "SELL", entry_price)
-                            if take_profit_price:
-                                tp_order = binance_client.place_take_profit_order(
-                                    symbol, "BUY", position_amount, take_profit_price
-                                )
-                                if tp_order:
-                                    logger.info(f"✅ Take profit placed at {take_profit_price}")
-                                else:
-                                    logger.error(f"❌ Failed to place take profit at {take_profit_price}")
                                     
                     except Exception as e:
                         logger.error(f"❌ Error placing protective orders: {e}")
@@ -1019,38 +979,21 @@ def check_for_signals(symbol=None):
                 symbol, side, current_price, position
             )
             
-            # Calculate trailing take-profit specifically for this symbol
-            new_take_profit = risk_manager.adjust_take_profit_for_trailing(
-                symbol, side, current_price, position
-            )
-            
-            # If either stop loss or take profit needs updating
-            if new_stop or new_take_profit:
+            # Check if stop loss needs updating (take profit functionality removed)
+            if new_stop:
                 # Only cancel orders for this specific symbol - critical for multi-instance mode
                 binance_client.cancel_position_orders(symbol)  # Use cancel_position_orders instead of cancel_all_open_orders
                 time.sleep(0.5)  # Small delay to ensure orders are cancelled
                 
-                # Always place new stop loss
-                stop_loss_price = new_stop if new_stop else risk_manager.calculate_stop_loss(symbol, side, current_price)
+                # Place new stop loss (only moves in favorable direction)
+                stop_loss_price = new_stop
                 sl_order = binance_client.place_stop_loss_order(
                     symbol, opposite_side, abs(position['position_amount']), stop_loss_price
                 )
                 if sl_order:
-                    if new_stop:
-                        logger.info(f"Updated trailing stop loss to {stop_loss_price}")
+                    logger.info(f"Updated trailing stop loss to {stop_loss_price} (moved in favorable direction)")
                 else:
                     logger.error(f"Failed to update stop loss order at {stop_loss_price}")
-                
-                # Always place new take profit
-                take_profit_price = new_take_profit if new_take_profit else risk_manager.calculate_take_profit(symbol, side, current_price)
-                tp_order = binance_client.place_take_profit_order(
-                    symbol, opposite_side, abs(position['position_amount']), take_profit_price
-                )
-                if tp_order:
-                    if new_take_profit:
-                        logger.info(f"Updated trailing take profit to {take_profit_price}")
-                else:
-                    logger.error(f"Failed to update take profit order at {take_profit_price}")
     
     except Exception as e:
         logger.error(f"Error in trading cycle: {e}")
@@ -1867,95 +1810,13 @@ def perform_test_trade(symbol=TRADING_SYMBOL):
 
 def place_partial_take_profits(symbol, side, quantity, entry_price, position_info=None):
     """
-    Place multiple take profit orders at different levels
+    Take profit functionality disabled - only using stop loss
     
-    Args:
-        symbol: Symbol to trade
-        side: The position side ('BUY' or 'SELL')
-        quantity: The position size
-        entry_price: The entry price of the position
-        position_info: Optional position info object
-        
     Returns:
-        List of placed take profit orders
+        Empty list (no take profit orders)
     """
-    logger.info(f"Setting up partial take profits for {symbol}")
-    
-    # First, cancel any existing take profit orders for this symbol to avoid conflicts
-    # This ensures each bot instance manages its own orders without interference
-    try:
-        # Get existing TP orders
-        existing_orders = binance_client.get_open_orders(symbol)
-        for order in existing_orders:
-            if (order.get('type') in ['TAKE_PROFIT_MARKET', 'TAKE_PROFIT'] and 
-                order.get('symbol') == symbol):
-                try:
-                    binance_client.client.futures_cancel_order(
-                        symbol=symbol, 
-                        orderId=order.get('orderId')
-                    )
-                    logger.info(f"Cancelled existing TP order {order.get('orderId')} for {symbol}")
-                except Exception as e:
-                    logger.warning(f"Error cancelling existing TP order: {e}")
-    except Exception as e:
-        logger.warning(f"Error checking existing TP orders: {e}")
-    
-    # Get partial take profit levels
-    take_profit_levels = risk_manager.calculate_partial_take_profits(symbol, side, entry_price)
-    
-    if not take_profit_levels:
-        logger.warning(f"No partial take profit levels returned. Using standard TP.")
-        take_profit_price = risk_manager.calculate_take_profit(symbol, side, entry_price)
-        if take_profit_price:
-            order = binance_client.place_take_profit_order(
-                symbol=symbol, 
-                side="SELL" if side == "BUY" else "BUY",  # Opposite side for closing
-                quantity=quantity, 
-                stop_price=take_profit_price
-            )
-            return [order] if order else []
-        return []
-    
-    tp_orders = []
-    remaining_qty = quantity
-    
-    # Place take profit orders for each level
-    for i, tp_level in enumerate(take_profit_levels):
-        # Last level uses all remaining quantity
-        if i == len(take_profit_levels) - 1:
-            level_qty = remaining_qty
-        else:
-            # Calculate quantity for this level
-            level_qty = round_quantity(quantity * tp_level['percentage'], symbol)
-            remaining_qty -= level_qty
-        
-        if level_qty <= 0:
-            logger.warning(f"Zero quantity for TP level {i+1}. Skipping.")
-            continue
-            
-        logger.info(f"Setting TP {i+1}: {level_qty} {symbol} ({tp_level['percentage']*100:.1f}% of position) at {tp_level['price']} ({tp_level['pct_from_entry']:.1f}% from entry)")
-        
-        # Place order - use reduce-only for partial closing
-        try:
-            close_side = "SELL" if side == "BUY" else "BUY"  # Opposite side to close
-            
-            # For partial TPs, we can't use closePosition=true, need to specify quantity
-            tp_order = binance_client.client.futures_create_order(
-                symbol=symbol,
-                side=close_side,
-                type='TAKE_PROFIT_MARKET',
-                stopPrice=tp_level['price'],
-                quantity=level_qty,
-                reduceOnly='true',
-                timeInForce='GTC'
-            )
-            
-            tp_orders.append(tp_order)
-            logger.info(f"Take profit {i+1} order placed successfully at {tp_level['price']}")
-        except Exception as e:
-            logger.error(f"Error placing take profit {i+1} order: {e}")
-    
-    return tp_orders
+    logger.info(f"Take profit functionality disabled for {symbol} - using stop loss only")
+    return []
 
 def generate_trade_chart(symbol, side, price, profit_loss=None):
     """

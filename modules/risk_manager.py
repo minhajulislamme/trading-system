@@ -6,8 +6,7 @@ from modules.config import (
     MAX_OPEN_POSITIONS,
     USE_STOP_LOSS, STOP_LOSS_PCT, 
     TRAILING_STOP, TRAILING_STOP_PCT,
-    USE_TAKE_PROFIT, TAKE_PROFIT_PCT,
-    TRAILING_TAKE_PROFIT, TRAILING_TAKE_PROFIT_PCT,
+    # Take profit imports removed - functionality disabled
     AUTO_COMPOUND, COMPOUND_REINVEST_PERCENT, COMPOUND_INTERVAL,
     # Multi-instance mode settings
     MULTI_INSTANCE_MODE, MAX_POSITIONS_PER_SYMBOL,
@@ -195,7 +194,15 @@ class RiskManager:
         return stop_price
         
     def adjust_stop_loss_for_trailing(self, symbol, side, current_price, position_info=None):
-        """Adjust stop loss for trailing stop if needed"""
+        """
+        Adjust stop loss for trailing stop if needed - ONLY moves in favor of the trader
+        
+        This function ensures:
+        1. Stop loss NEVER moves against the trader (increases risk)
+        2. Stop loss only moves to lock in profits or reduce losses
+        3. For LONG positions: stop loss can only move UP (higher price)
+        4. For SHORT positions: stop loss can only move DOWN (lower price)
+        """
         if not TRAILING_STOP:
             return None
             
@@ -214,21 +221,37 @@ class RiskManager:
             
         entry_price = position_info['entry_price']
         
-        # Calculate new stop loss based on current price
+        # Get current stop loss to compare
+        current_stop = self.calculate_stop_loss(symbol, side, entry_price)
+        
+        # Calculate new trailing stop loss based on current price
         if side == "BUY":  # Long position
             new_stop = current_price * (1 - TRAILING_STOP_PCT)
-            # Only move stop loss up, never down
-            current_stop = self.calculate_stop_loss(symbol, side, entry_price)
+            
+            # FOR LONG POSITIONS: Stop loss can ONLY move UP (never down)
+            # This protects profits and never increases risk
             if current_stop and new_stop <= current_stop:
-                logger.debug(f"Not adjusting trailing stop: current ({current_stop}) > calculated ({new_stop})")
+                logger.debug(f"Trailing stop NOT moved: new stop ({new_stop:.6f}) would be same or lower than current ({current_stop:.6f})")
+                logger.debug(f"Long position: stop loss only moves UP to protect profits")
                 return None
+                
+            # Additional check: ensure we're actually in profit territory
+            if new_stop <= entry_price:
+                logger.debug(f"Trailing stop not at profit level yet - current: {new_stop:.6f}, entry: {entry_price:.6f}")
+                
         else:  # Short position
             new_stop = current_price * (1 + TRAILING_STOP_PCT)
-            # Only move stop loss down, never up
-            current_stop = self.calculate_stop_loss(symbol, side, entry_price)
+            
+            # FOR SHORT POSITIONS: Stop loss can ONLY move DOWN (never up)  
+            # This protects profits and never increases risk
             if current_stop and new_stop >= current_stop:
-                logger.debug(f"Not adjusting trailing stop: current ({current_stop}) < calculated ({new_stop})")
+                logger.debug(f"Trailing stop NOT moved: new stop ({new_stop:.6f}) would be same or higher than current ({current_stop:.6f})")
+                logger.debug(f"Short position: stop loss only moves DOWN to protect profits")
                 return None
+                
+            # Additional check: ensure we're actually in profit territory
+            if new_stop >= entry_price:
+                logger.debug(f"Trailing stop not at profit level yet - current: {new_stop:.6f}, entry: {entry_price:.6f}")
                 
         # Apply price precision
         symbol_info = self.binance_client.get_symbol_info(symbol)
@@ -236,135 +259,32 @@ class RiskManager:
             price_precision = symbol_info['price_precision']
             new_stop = round(new_stop, price_precision)
             
-        logger.info(f"Adjusted trailing stop loss to {new_stop} ({TRAILING_STOP_PCT*100}%)")
-        logger.info(f"Current price: {current_price}, Entry price: {entry_price}, Stop loss moved: {current_stop} -> {new_stop}")
+        # Calculate profit protection
+        if side == "BUY":
+            profit_locked = ((new_stop - entry_price) / entry_price) * 100
+        else:
+            profit_locked = ((entry_price - new_stop) / entry_price) * 100
+            
+        logger.info(f"✅ TRAILING STOP MOVED IN FAVORABLE DIRECTION ✅")
+        logger.info(f"Symbol: {symbol} | Side: {side}")
+        logger.info(f"Entry: {entry_price:.6f} | Current: {current_price:.6f}")
+        logger.info(f"Stop Loss: {current_stop:.6f} → {new_stop:.6f}")
+        logger.info(f"Profit protected: {profit_locked:.2f}%")
+        
         return new_stop
         
-    # For API compatibility with existing code
+    # For API compatibility with existing code (disabled)
     def calculate_take_profit(self, symbol, side, entry_price):
-        """Calculate take profit price based on configuration"""
-        if not USE_TAKE_PROFIT:
-            return None
-            
-        if side == "BUY":  # Long position
-            take_profit_price = entry_price * (1 + TAKE_PROFIT_PCT)
-        else:  # Short position
-            take_profit_price = entry_price * (1 - TAKE_PROFIT_PCT)
-            
-        # Apply price precision
-        symbol_info = self.binance_client.get_symbol_info(symbol)
-        if symbol_info:
-            price_precision = symbol_info['price_precision']
-            take_profit_price = round(take_profit_price, price_precision)
-            
-        logger.info(f"Calculated take profit at {take_profit_price} ({TAKE_PROFIT_PCT*100}%)")
-        return take_profit_price
+        """Take profit functionality disabled - returns None"""
+        return None
 
     def adjust_take_profit_for_trailing(self, symbol, side, current_price, position_info=None):
-        """
-        Adjust take profit target for trailing take profit if enabled
-        
-        Args:
-            symbol: Trading pair symbol
-            side: 'BUY' or 'SELL' position side
-            current_price: Current market price
-            position_info: Optional position information (will be fetched if not provided)
-            
-        Returns:
-            float or None: New take profit price if adjusted, None otherwise
-        """
-        if not TRAILING_TAKE_PROFIT:
-            return None
-            
-        if not position_info:
-            # Get position info specifically for this symbol
-            position_info = self.binance_client.get_position_info(symbol)
-            
-        # Only proceed if we have a valid position for this specific symbol
-        if not position_info or abs(position_info['position_amount']) == 0:
-            return None
-            
-        # Ensure we're dealing with the right symbol
-        if position_info['symbol'] != symbol:
-            logger.warning(f"Position symbol mismatch: expected {symbol}, got {position_info['symbol']}")
-            return None
-            
-        entry_price = position_info['entry_price']
-        
-        # Calculate new take profit based on current price
-        if side == "BUY":  # Long position
-            new_tp = current_price * (1 + TRAILING_TAKE_PROFIT_PCT)
-            # Only move take profit down, never up (to lock in profits)
-            current_tp = self.calculate_take_profit(symbol, side, entry_price)
-            if current_tp and new_tp >= current_tp:
-                logger.debug(f"Not adjusting trailing take profit: current ({current_tp}) < calculated ({new_tp})")
-                return None
-        else:  # Short position
-            new_tp = current_price * (1 - TRAILING_TAKE_PROFIT_PCT)
-            # Only move take profit up, never down (to lock in profits)
-            current_tp = self.calculate_take_profit(symbol, side, entry_price)
-            if current_tp and new_tp <= current_tp:
-                logger.debug(f"Not adjusting trailing take profit: current ({current_tp}) > calculated ({new_tp})")
-                return None
-                
-        # Apply price precision
-        symbol_info = self.binance_client.get_symbol_info(symbol)
-        if symbol_info:
-            price_precision = symbol_info['price_precision']
-            new_tp = round(new_tp, price_precision)
-            
-        logger.info(f"Adjusted trailing take profit to {new_tp} ({TRAILING_TAKE_PROFIT_PCT*100}%)")
-        logger.info(f"Current price: {current_price}, Entry price: {entry_price}, Take profit moved: {current_tp} -> {new_tp}")
-        return new_tp
+        """Take profit functionality disabled - returns None"""
+        return None
 
     def calculate_partial_take_profits(self, symbol, side, entry_price):
-        """
-        Calculate multiple take profit levels for partial position closing
-        
-        Args:
-            symbol: Trading pair symbol
-            side: 'BUY' or 'SELL' position side
-            entry_price: Entry price of the position
-            
-        Returns:
-            list: List of dictionaries with 'price', 'percentage', and 'pct_from_entry' keys
-        """
-        if not USE_TAKE_PROFIT:
-            return []
-            
-        # Define take profit levels as percentages from entry price
-        if side == "BUY":  # Long position
-            tp_levels = [
-                {'pct_from_entry': 2.5, 'percentage': 0.5},   # Take 50% profit at 2.5% gain
-                {'pct_from_entry': 5.0, 'percentage': 0.5}    # Take remaining 50% at 5% gain
-            ]
-        else:  # Short position
-            tp_levels = [
-                {'pct_from_entry': -2.5, 'percentage': 0.5},  # Take 50% profit at 2.5% gain
-                {'pct_from_entry': -5.0, 'percentage': 0.5}   # Take remaining 50% at 5% gain
-            ]
-        
-        # Convert percentage gains to actual prices
-        symbol_info = self.binance_client.get_symbol_info(symbol)
-        price_precision = symbol_info['price_precision'] if symbol_info else 4
-        
-        take_profit_levels = []
-        for level in tp_levels:
-            if side == "BUY":
-                price = entry_price * (1 + level['pct_from_entry'] / 100)
-            else:
-                price = entry_price * (1 - abs(level['pct_from_entry']) / 100)
-                
-            price = round(price, price_precision)
-            
-            take_profit_levels.append({
-                'price': price,
-                'percentage': level['percentage'],
-                'pct_from_entry': abs(level['pct_from_entry'])
-            })
-            
-        logger.info(f"Calculated {len(take_profit_levels)} partial take profit levels for {symbol} {side} position")
-        return take_profit_levels
+        """Partial take profit functionality disabled - returns empty list"""
+        return []
     
     def update_balance_for_compounding(self):
         """Update balance tracking for auto-compounding"""

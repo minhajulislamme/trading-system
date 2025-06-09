@@ -10,8 +10,9 @@ import json
 
 from modules.config import (
     BACKTEST_INITIAL_BALANCE, BACKTEST_COMMISSION, FIXED_TRADE_PERCENTAGE,
-    LEVERAGE, STOP_LOSS_PCT, TAKE_PROFIT_PCT, BACKTEST_USE_AUTO_COMPOUND,
+    LEVERAGE, STOP_LOSS_PCT, BACKTEST_USE_AUTO_COMPOUND,
     COMPOUND_REINVEST_PERCENT
+    # TAKE_PROFIT_PCT removed - functionality disabled
 )
 from modules.strategies import get_strategy, TradingStrategy
 
@@ -118,7 +119,7 @@ class Backtester:
         return position_size
         
     def enter_position(self, side, price, date, stop_loss_price=None, take_profit_price=None):
-        """Enter a new position"""
+        """Enter a new position - take profit functionality removed"""
         if self.in_position:
             return False
             
@@ -129,12 +130,8 @@ class Backtester:
             else:  # Short
                 stop_loss_price = price * (1 + STOP_LOSS_PCT)
                 
-        # Calculate take profit if not provided
-        if take_profit_price is None:
-            if side == "BUY":  # Long
-                take_profit_price = price * (1 + TAKE_PROFIT_PCT)
-            else:  # Short
-                take_profit_price = price * (1 - TAKE_PROFIT_PCT)
+        # Take profit functionality completely removed - using stop loss only
+        take_profit_price = None
                 
         # Calculate position size
         position_size = self.calculate_position_size(price, stop_loss_price)
@@ -192,7 +189,7 @@ class Backtester:
             'commission': commission,
             'balance': self.balance,
             'stop_loss': stop_loss_price,
-            'take_profit': take_profit_price
+            'take_profit': None  # Take profit functionality removed
         })
         
         return True
@@ -295,7 +292,7 @@ class Backtester:
         })
         
     def check_stop_loss_take_profit(self, high, low, date):
-        """Check if stop loss or take profit was hit"""
+        """Check if stop loss was hit (take profit functionality removed)"""
         if not self.in_position:
             return False
             
@@ -303,16 +300,12 @@ class Backtester:
             if low <= self.stop_loss:
                 # Stop loss hit
                 return self.exit_position(self.stop_loss, date, "stop_loss")
-            elif high >= self.take_profit:
-                # Take profit hit
-                return self.exit_position(self.take_profit, date, "take_profit")
+            # Take profit check removed - using stop loss only strategy
         else:  # Short
             if high >= self.stop_loss:
                 # Stop loss hit
                 return self.exit_position(self.stop_loss, date, "stop_loss")
-            elif low <= self.take_profit:
-                # Take profit hit
-                return self.exit_position(self.take_profit, date, "take_profit")
+            # Take profit check removed - using stop loss only strategy
                 
         return False
         
