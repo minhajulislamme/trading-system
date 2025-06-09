@@ -7,6 +7,7 @@ import schedule
 import argparse
 import json
 import traceback 
+import requests
 from datetime import datetime, timedelta
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -100,7 +101,6 @@ class TelegramNotifier:
             return
             
         try:
-            import requests
             url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
             
             # Escape Markdown special characters to avoid parsing errors
@@ -127,7 +127,6 @@ class TelegramNotifier:
             return
             
         try:
-            import requests
             url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
             
             files = {'photo': open(photo_path, 'rb')}
@@ -152,7 +151,6 @@ class TelegramNotifier:
             return
             
         try:
-            import requests
             url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
             payload = {
                 "chat_id": TELEGRAM_CHAT_ID,
@@ -871,7 +869,6 @@ def check_for_signals(symbol=None):
                                     
                     except Exception as e:
                         logger.error(f"❌ Error placing protective orders: {e}")
-                        import traceback
                         logger.error(f"Traceback: {traceback.format_exc()}")
                 else:
                     logger.error(f"❌ Failed to place BUY order!")
@@ -1005,7 +1002,6 @@ def check_for_signals(symbol=None):
                                     
                     except Exception as e:
                         logger.error(f"❌ Error placing protective orders: {e}")
-                        import traceback
                         logger.error(f"Traceback: {traceback.format_exc()}")
                 else:
                     logger.error(f"❌ Failed to place SELL order!")
@@ -1058,7 +1054,6 @@ def check_for_signals(symbol=None):
     
     except Exception as e:
         logger.error(f"Error in trading cycle: {e}")
-        import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
 
 
