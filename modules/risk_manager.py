@@ -193,6 +193,38 @@ class RiskManager:
         logger.info(f"Calculated stop loss at {stop_price} ({STOP_LOSS_PCT*100}%)")
         return stop_price
         
+    def _get_current_stop_loss_price(self, symbol, side, entry_price):
+        """
+        Get the actual current stop loss price from existing orders.
+        If no stop loss order exists, calculate it from entry price.
+        
+        Args:
+            symbol: Trading pair symbol
+            side: Position side ('BUY' or 'SELL')
+            entry_price: Entry price of the position
+            
+        Returns:
+            float: Current stop loss price
+        """
+        try:
+            # Get existing stop loss orders for this symbol
+            orders = self.binance_client.get_open_orders(symbol)
+            
+            for order in orders:
+                # Look for stop loss orders (STOP_MARKET or STOP)
+                if order.get('type') in ['STOP_MARKET', 'STOP'] and order.get('symbol') == symbol:
+                    stop_price = float(order.get('stopPrice', 0))
+                    if stop_price > 0:
+                        logger.debug(f"Found existing stop loss order at {stop_price} for {symbol}")
+                        return stop_price
+                        
+        except Exception as e:
+            logger.warning(f"Error getting current stop loss price from orders: {e}")
+            
+        # If no existing stop loss order found, calculate from entry price
+        logger.debug(f"No existing stop loss order found, calculating from entry price {entry_price}")
+        return self.calculate_stop_loss(symbol, side, entry_price)
+        
     def adjust_stop_loss_for_trailing(self, symbol, side, current_price, position_info=None):
         """
         Adjust stop loss for trailing stop if needed - ONLY moves in favor of the trader
@@ -221,8 +253,8 @@ class RiskManager:
             
         entry_price = position_info['entry_price']
         
-        # Get current stop loss to compare
-        current_stop = self.calculate_stop_loss(symbol, side, entry_price)
+        # Get current stop loss to compare - use ACTUAL stop loss from existing orders, not calculated from entry
+        current_stop = self._get_current_stop_loss_price(symbol, side, entry_price)
         
         # Calculate new trailing stop loss based on current price
         if side == "BUY":  # Long position
