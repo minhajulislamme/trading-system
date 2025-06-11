@@ -24,28 +24,12 @@ else:
 # API request settings
 RECV_WINDOW = int(os.getenv('BINANCE_RECV_WINDOW', '10000'))
 
-# Trading parameters - RAYSOL only
+# Trading parameters
 TRADING_SYMBOL = os.getenv('TRADING_SYMBOL', 'RAYSOLUSDT')
 TRADING_TYPE = 'FUTURES'  # Use futures trading
 LEVERAGE = int(os.getenv('LEVERAGE', '10'))
 MARGIN_TYPE = os.getenv('MARGIN_TYPE', 'ISOLATED')  # ISOLATED or CROSSED
-STRATEGY = os.getenv('STRATEGY', 'DynamicStrategy')
-
-# RAYSOL-specific strategy settings
-RAYSOL_TREND_EMA_FAST = int(os.getenv('RAYSOL_TREND_EMA_FAST', '8'))
-RAYSOL_TREND_EMA_SLOW = int(os.getenv('RAYSOL_TREND_EMA_SLOW', '21'))
-RAYSOL_VOLATILITY_LOOKBACK = int(os.getenv('RAYSOL_VOLATILITY_LOOKBACK', '20'))
-RAYSOL_VOLUME_MA_PERIOD = int(os.getenv('RAYSOL_VOLUME_MA_PERIOD', '20'))
-# RAYSOL-specific advanced parameters
-RAYSOL_VOLATILITY_MULTIPLIER = float(os.getenv('RAYSOL_VOLATILITY_MULTIPLIER', '1.1'))
-RAYSOL_TREND_CONDITION_MULTIPLIER = float(os.getenv('RAYSOL_TREND_CONDITION_MULTIPLIER', '1.3'))
-
-# No other cryptocurrency settings - RAYSOL only
-
-# RAYSOL market condition detection settings
-RAYSOL_ADX_PERIOD = int(os.getenv('RAYSOL_ADX_PERIOD', '14'))
-RAYSOL_ADX_THRESHOLD = int(os.getenv('RAYSOL_ADX_THRESHOLD', '25'))
-RAYSOL_SIDEWAYS_THRESHOLD = int(os.getenv('RAYSOL_SIDEWAYS_THRESHOLD', '15'))
+STRATEGY = os.getenv('STRATEGY', 'SmartTrendCatcher')
 
 # Position sizing
 INITIAL_BALANCE = float(os.getenv('INITIAL_BALANCE', '50.0'))
@@ -74,41 +58,16 @@ FAST_EMA = int(os.getenv('FAST_EMA', '8'))
 SLOW_EMA = int(os.getenv('SLOW_EMA', '21'))
 TIMEFRAME = os.getenv('TIMEFRAME', '15m')
 
-# Risk management - Standard settings
+# Risk management - Stop loss only (take profit completely removed)
 USE_STOP_LOSS = os.getenv('USE_STOP_LOSS', 'True').lower() == 'true'
-STOP_LOSS_PCT = float(os.getenv('STOP_LOSS_PCT', '0.02'))
+STOP_LOSS_PCT = float(os.getenv('STOP_LOSS_PCT', '0.02'))  # 2% stop loss
 TRAILING_STOP = os.getenv('TRAILING_STOP', 'True').lower() == 'true'
-TRAILING_STOP_PCT = float(os.getenv('TRAILING_STOP_PCT', '0.02'))
-
-# Remove complex adaptive risk management settings since we're simplifying
-# Keep these variables for compatibility but use simple values
-STOP_LOSS_PCT_BULLISH = STOP_LOSS_PCT
-STOP_LOSS_PCT_BEARISH = STOP_LOSS_PCT
-STOP_LOSS_PCT_SIDEWAYS = STOP_LOSS_PCT
-
-# TAKE PROFIT FUNCTIONALITY COMPLETELY REMOVED
-USE_TAKE_PROFIT = False
-TAKE_PROFIT_PCT = 0.0
-TRAILING_TAKE_PROFIT = False
-TRAILING_TAKE_PROFIT_PCT = 0.0
-
-# Simple mapping for compatibility (all take profit disabled)
-TAKE_PROFIT_PCT_BULLISH = 0.0
-TAKE_PROFIT_PCT_BEARISH = 0.0
-TAKE_PROFIT_PCT_SIDEWAYS = 0.0
-
-TRAILING_STOP_PCT_BULLISH = TRAILING_STOP_PCT
-TRAILING_STOP_PCT_BEARISH = TRAILING_STOP_PCT
-TRAILING_STOP_PCT_SIDEWAYS = TRAILING_STOP_PCT
-
-TRAILING_TAKE_PROFIT_PCT_BULLISH = 0.0
-TRAILING_TAKE_PROFIT_PCT_BEARISH = 0.0
-TRAILING_TAKE_PROFIT_PCT_SIDEWAYS = 0.0
+TRAILING_STOP_PCT = float(os.getenv('TRAILING_STOP_PCT', '0.02'))  # 2% trailing stop
 
 # Backtesting parameters
 BACKTEST_START_DATE = os.getenv('BACKTEST_START_DATE', '2023-01-01')
 BACKTEST_END_DATE = os.getenv('BACKTEST_END_DATE', '')  # Empty means use current date
-BACKTEST_INITIAL_BALANCE = float(os.getenv('BACKTEST_INITIAL_BALANCE', '10.0'))
+BACKTEST_INITIAL_BALANCE = float(os.getenv('BACKTEST_INITIAL_BALANCE', '50.0'))
 BACKTEST_COMMISSION = float(os.getenv('BACKTEST_COMMISSION', '0.0004'))  # 0.04% taker fee
 BACKTEST_USE_AUTO_COMPOUND = os.getenv('BACKTEST_USE_AUTO_COMPOUND', 'True').lower() == 'true'
 

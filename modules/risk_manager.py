@@ -6,15 +6,10 @@ from modules.config import (
     MAX_OPEN_POSITIONS,
     USE_STOP_LOSS, STOP_LOSS_PCT, 
     TRAILING_STOP, TRAILING_STOP_PCT,
-    # Take profit imports removed - functionality disabled
     AUTO_COMPOUND, COMPOUND_REINVEST_PERCENT, COMPOUND_INTERVAL,
-    # Multi-instance mode settings
     MULTI_INSTANCE_MODE, MAX_POSITIONS_PER_SYMBOL,
-    # Futures trading settings
     LEVERAGE,
-    # Margin safety settings
     MARGIN_SAFETY_FACTOR, MAX_POSITION_SIZE_PCT, MIN_FREE_BALANCE_PCT,
-    # Fixed percentage trading
     FIXED_TRADE_PERCENTAGE
 )
 
@@ -31,8 +26,8 @@ class RiskManager:
         self.position_size_multiplier = 1.0  # Default position size multiplier
         
     def set_market_condition(self, market_condition):
-        """Set the current market condition for compatibility with existing code"""
-        if market_condition in ['BULLISH', 'BEARISH', 'SIDEWAYS', 'EXTREME_BULLISH', 'EXTREME_BEARISH', 'SQUEEZE']:
+        """Set the current market condition"""
+        if market_condition in ['BULLISH', 'BEARISH', 'SIDEWAYS']:
             if self.current_market_condition != market_condition:
                 logger.info(f"Market condition changed to {market_condition}")
                 self.current_market_condition = market_condition
@@ -304,19 +299,6 @@ class RiskManager:
         logger.info(f"Profit protected: {profit_locked:.2f}%")
         
         return new_stop
-        
-    # For API compatibility with existing code (disabled)
-    def calculate_take_profit(self, symbol, side, entry_price):
-        """Take profit functionality disabled - returns None"""
-        return None
-
-    def adjust_take_profit_for_trailing(self, symbol, side, current_price, position_info=None):
-        """Take profit functionality disabled - returns None"""
-        return None
-
-    def calculate_partial_take_profits(self, symbol, side, entry_price):
-        """Partial take profit functionality disabled - returns empty list"""
-        return []
     
     def update_balance_for_compounding(self):
         """Update balance tracking for auto-compounding"""

@@ -118,8 +118,11 @@ check my main .py than tell me now to excute trade like one positon buy close an
 
 python3 main.py --backtest --symbol AVAXUSDT --strategy AvaxDynamicGrid
 python3 main.py --backtest --symbol KAITOUSDT --strategy KaitoDynamicGridStrategy
-python3 main.py --backtest --symbol RAYSOLUSDT --strategy RaysolDynamicStrategy
+python3 main.py --backtest --symbol RAYSOLUSDT --strategy ComprehensiveStrategy
 
+cd /home/minhajulislam/tradingbot && python3 main.py --backtest --symbol RAYSOLUSDT --strategy SmartTrendCatcher --start-date "30 days ago"
+# or
+python3 main.py --symbol XRPUSDT --strategy RaysolDynamicStrategy
 
 but i get notification but not place position
 
@@ -142,3 +145,14 @@ Enhanced momentum filtering for trend confirmation
 
 
 #codebase check my all file and remove take profit and traling take profit and make stoploss and traling stoploss only move when it fever me not againt me  also update .env
+
+
+#codebase chek my project and add a complete strategies use ema for trand detection rsi pullback detection use macd momentum confirmation main entry singnal ma crossover confrimation 1 rsi confirmatin 2 macd also brackout of resistance /support
+
+
+ Enhanced Smart Trend Catcher Strategy for Live Trading:
+    - Trend Filter: 50 EMA with trend strength validation
+    - Pullback Detection: Multi-timeframe RSI analysis
+    - Confirmation: MACD Histogram momentum + Volume confirmation
+    - Signal Filtering: Confidence scoring and market condition awareness
+    - Risk Integration: Dynamic position sizing based on volatility

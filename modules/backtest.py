@@ -12,7 +12,6 @@ from modules.config import (
     BACKTEST_INITIAL_BALANCE, BACKTEST_COMMISSION, FIXED_TRADE_PERCENTAGE,
     LEVERAGE, STOP_LOSS_PCT, BACKTEST_USE_AUTO_COMPOUND,
     COMPOUND_REINVEST_PERCENT
-    # TAKE_PROFIT_PCT removed - functionality disabled
 )
 from modules.strategies import get_strategy, TradingStrategy
 
@@ -43,7 +42,6 @@ class Backtester:
         self.position_size = 0
         self.entry_price = 0
         self.stop_loss = 0
-        self.take_profit = 0
         
         # Performance tracking
         self.trades = []
@@ -118,8 +116,8 @@ class Backtester:
             
         return position_size
         
-    def enter_position(self, side, price, date, stop_loss_price=None, take_profit_price=None):
-        """Enter a new position - take profit functionality removed"""
+    def enter_position(self, side, price, date, stop_loss_price=None):
+        """Enter a new position"""
         if self.in_position:
             return False
             
@@ -129,9 +127,6 @@ class Backtester:
                 stop_loss_price = price * (1 - STOP_LOSS_PCT)
             else:  # Short
                 stop_loss_price = price * (1 + STOP_LOSS_PCT)
-                
-        # Take profit functionality completely removed - using stop loss only
-        take_profit_price = None
                 
         # Calculate position size
         position_size = self.calculate_position_size(price, stop_loss_price)
@@ -171,7 +166,6 @@ class Backtester:
         self.position_size = position_size
         self.entry_price = execution_price
         self.stop_loss = stop_loss_price
-        self.take_profit = take_profit_price
         
         # Deduct commission from balance
         self.balance -= commission
@@ -188,8 +182,7 @@ class Backtester:
             'cost': position_cost,
             'commission': commission,
             'balance': self.balance,
-            'stop_loss': stop_loss_price,
-            'take_profit': None  # Take profit functionality removed
+            'stop_loss': stop_loss_price
         })
         
         return True
@@ -264,7 +257,6 @@ class Backtester:
         self.position_size = 0
         self.entry_price = 0
         self.stop_loss = 0
-        self.take_profit = 0
         
         return True
         
@@ -291,8 +283,8 @@ class Backtester:
             'equity': equity
         })
         
-    def check_stop_loss_take_profit(self, high, low, date):
-        """Check if stop loss was hit (take profit functionality removed)"""
+    def check_stop_loss(self, high, low, date):
+        """Check if stop loss was hit"""
         if not self.in_position:
             return False
             
@@ -300,12 +292,10 @@ class Backtester:
             if low <= self.stop_loss:
                 # Stop loss hit
                 return self.exit_position(self.stop_loss, date, "stop_loss")
-            # Take profit check removed - using stop loss only strategy
         else:  # Short
             if high >= self.stop_loss:
                 # Stop loss hit
                 return self.exit_position(self.stop_loss, date, "stop_loss")
-            # Take profit check removed - using stop loss only strategy
                 
         return False
         
@@ -329,7 +319,7 @@ class Backtester:
         trade_execution_probability = 0.85  # 85% chance of executing a valid signal
             
         # Process each candle
-        prev_idx = 30  # Start with enough data for indicators
+        prev_idx = 35  # Start with enough data for indicators (increased from 30 to 35)
         for i in tqdm(range(prev_idx, len(df))):
             # Get current candle data
             current = df.iloc[i]
@@ -341,9 +331,9 @@ class Backtester:
             # Get historical data up to current candle for signal generation
             hist_data = df.iloc[:i+1].values.tolist()
             
-            # First check if stop loss or take profit was hit
+            # First check if stop loss was hit
             if self.in_position:
-                if self.check_stop_loss_take_profit(high, low, date):
+                if self.check_stop_loss(high, low, date):
                     # Position was closed, update equity
                     self.update_equity(date, close)
                     continue
