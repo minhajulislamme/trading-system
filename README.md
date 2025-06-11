@@ -17,7 +17,7 @@ This is a cutting-edge cryptocurrency trading system designed for Binance Future
 
 ### 🎯 Key Features
 
-- **🔥 Advanced DynamicStrategy** - AI-enhanced trading with 50+ technical indicators
+- **🔥 Advanced RaysolDynamicStrategy** - AI-enhanced trading with 50+ technical indicators
 - **📊 Institutional Order Flow Analysis** - Detect market maker vs retail activity
 - **🎢 Market Regime Detection** - Adaptive algorithms for different market conditions
 - **⚡ Real-time WebSocket Streaming** - Sub-second market data processing
@@ -75,9 +75,9 @@ BINANCE_API_SECRET=your_api_secret_here
 BINANCE_API_TESTNET=True  # Set to False for live trading
 
 # Trading Configuration
-TRADING_SYMBOL=SUIUSDT
+TRADING_SYMBOL=RAYSOLUSDT
 LEVERAGE=10
-STRATEGY=DynamicStrategy
+STRATEGY=RaysolDynamicStrategy
 INITIAL_BALANCE=50.0
 
 # Risk Management
@@ -104,7 +104,7 @@ python main.py
 python main.py --symbol BTCUSDT
 
 # Start with custom strategy
-python main.py --strategy DynamicStrategy
+python main.py --strategy RaysolDynamicStrategy
 
 # Run backtest first
 python main.py --backtest --days 30
@@ -128,7 +128,7 @@ python main.py --backtest --days 30
 ```
 Options:
   --symbol TEXT          Trading symbol (default: SUIUSDT)
-  --strategy TEXT        Strategy to use (default: DynamicStrategy)
+  --strategy TEXT        Strategy to use (default: RaysolDynamicStrategy)
   --timeframe TEXT       Timeframe for analysis (default: 15m)
   --backtest             Run backtest before live trading
   --days INTEGER         Days for backtesting (default: 30)
@@ -139,7 +139,7 @@ Options:
 
 ## 🧠 Trading Strategies
 
-### DynamicStrategy (Primary)
+### RaysolDynamicStrategy (Primary)
 
 Our flagship strategy featuring:
 
@@ -228,13 +228,13 @@ python main.py --backtest --report --export-csv
 | `TRADING_SYMBOL`   | Primary trading pair | SUIUSDT         |
 | `LEVERAGE`         | Futures leverage     | 10              |
 | `TIMEFRAME`        | Analysis timeframe   | 15m             |
-| `STRATEGY`         | Trading strategy     | DynamicStrategy |
+| `STRATEGY`         | Trading strategy     | RaysolDynamicStrategy |
 | `RISK_PER_TRADE`   | Risk per trade (%)   | 2.0             |
 | `MAX_DAILY_TRADES` | Daily trade limit    | 5               |
 
 ### Strategy Parameters
 
-#### DynamicStrategy Configuration
+#### RaysolDynamicStrategy Configuration
 
 ```python
 # EMA Settings
