@@ -1180,7 +1180,7 @@ class TradingStrategy:
             # Return the first signal as fallback
             return signal_candidates[0] if signal_candidates else None
 
-class DynamicStrategy(TradingStrategy):
+class RaysolDynamicStrategy(TradingStrategy):
     """
     Enhanced Dynamic RAYSOL Trading Strategy that adapts to market trends
     and different market conditions (bullish, bearish, and sideways).
@@ -1219,7 +1219,7 @@ class DynamicStrategy(TradingStrategy):
                  cooloff_period=3,
                  max_consecutive_losses=2):
         
-        super().__init__('DynamicStrategy')
+        super().__init__('RaysolDynamicStrategy')
         
         # Base parameters
         self.trend_ema_fast = trend_ema_fast
@@ -2868,7 +2868,7 @@ def get_strategy(strategy_name):
     )
     
     strategies = {
-        'DynamicStrategy': DynamicStrategy(
+        'RaysolDynamicStrategy': RaysolDynamicStrategy(
             trend_ema_fast=RAYSOL_TREND_EMA_FAST,
             trend_ema_slow=RAYSOL_TREND_EMA_SLOW,
             volatility_lookback=RAYSOL_VOLATILITY_LOOKBACK,
@@ -2898,8 +2898,8 @@ def get_strategy_for_symbol(symbol, strategy_name=None):
     if strategy_name:
         return get_strategy(strategy_name)
     
-    # Default to SUIUSDT strategy for any symbol
-    return DynamicStrategy()
+    # Default to RAYSOLUSDT strategy for any symbol
+    return RaysolDynamicStrategy()
     
     # Default to base strategy if needed
     # return TradingStrategy(symbol)

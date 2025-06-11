@@ -66,7 +66,7 @@ def test_strategies():
     from modules.strategies import get_strategy
     
     # Test RAYSOL strategy
-    raysol_strategy = get_strategy('DynamicStrategy')
+    raysol_strategy = get_strategy('RaysolDynamicStrategy')
     logger.info(f"Loaded strategy: {raysol_strategy.strategy_name}")
     
     return raysol_strategy
