@@ -156,3 +156,8 @@ Enhanced momentum filtering for trend confirmation
     - Confirmation: MACD Histogram momentum + Volume confirmation
     - Signal Filtering: Confidence scoring and market condition awareness
     - Risk Integration: Dynamic position sizing based on volatility
+
+
+    cd /home/minhajulislam/tradingbot && python3 main.py --backtest --symbol RAYSOLUSDT --strategy SmartTrendCatcher --start-date "30 days ago"
+
+python3 main.py --backtest --symbol SUIUSDT --strategy SmartTrendCatcher --start-date "30 days ago"

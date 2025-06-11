@@ -25,21 +25,21 @@ else:
 RECV_WINDOW = int(os.getenv('BINANCE_RECV_WINDOW', '10000'))
 
 # Trading parameters
-TRADING_SYMBOL = os.getenv('TRADING_SYMBOL', 'RAYSOLUSDT')
+TRADING_SYMBOL = os.getenv('TRADING_SYMBOL', 'SUIUSDT')
 TRADING_TYPE = 'FUTURES'  # Use futures trading
 LEVERAGE = int(os.getenv('LEVERAGE', '10'))
 MARGIN_TYPE = os.getenv('MARGIN_TYPE', 'ISOLATED')  # ISOLATED or CROSSED
 STRATEGY = os.getenv('STRATEGY', 'SmartTrendCatcher')
 
-# Position sizing
+# Position sizing - Enhanced risk management
 INITIAL_BALANCE = float(os.getenv('INITIAL_BALANCE', '50.0'))
-FIXED_TRADE_PERCENTAGE = float(os.getenv('FIXED_TRADE_PERCENTAGE', '0.75'))  # Use 75% of balance per trade
-MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '6'))
+FIXED_TRADE_PERCENTAGE = float(os.getenv('FIXED_TRADE_PERCENTAGE', '0.30'))  # Reduced to 30% for better risk management
+MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '3'))  # Reduced max positions
 
-# Margin safety settings
-MARGIN_SAFETY_FACTOR = float(os.getenv('MARGIN_SAFETY_FACTOR', '0.95'))  # Use at most 95% of available margin
-MAX_POSITION_SIZE_PCT = float(os.getenv('MAX_POSITION_SIZE_PCT', '0.50'))  # Max position size as % of balance
-MIN_FREE_BALANCE_PCT = float(os.getenv('MIN_FREE_BALANCE_PCT', '0.05'))  # Keep at least 5% of balance free
+# Margin safety settings - More conservative
+MARGIN_SAFETY_FACTOR = float(os.getenv('MARGIN_SAFETY_FACTOR', '0.90'))  # Use at most 90% of available margin
+MAX_POSITION_SIZE_PCT = float(os.getenv('MAX_POSITION_SIZE_PCT', '0.40'))  # Max 40% position size
+MIN_FREE_BALANCE_PCT = float(os.getenv('MIN_FREE_BALANCE_PCT', '0.10'))  # Keep at least 10% free
 
 # Multi-instance configuration for running separate bot instances per trading pair
 MULTI_INSTANCE_MODE = os.getenv('MULTI_INSTANCE_MODE', 'True').lower() == 'true'
@@ -58,24 +58,26 @@ FAST_EMA = int(os.getenv('FAST_EMA', '8'))
 SLOW_EMA = int(os.getenv('SLOW_EMA', '21'))
 TIMEFRAME = os.getenv('TIMEFRAME', '15m')
 
-# Risk management - Stop loss only (take profit completely removed)
+# Risk management - Enhanced stop loss settings
 USE_STOP_LOSS = os.getenv('USE_STOP_LOSS', 'True').lower() == 'true'
-STOP_LOSS_PCT = float(os.getenv('STOP_LOSS_PCT', '0.02'))  # 2% stop loss
+STOP_LOSS_PCT = float(os.getenv('STOP_LOSS_PCT', '0.025'))  # 2.5% stop loss (more conservative)
 TRAILING_STOP = os.getenv('TRAILING_STOP', 'True').lower() == 'true'
-TRAILING_STOP_PCT = float(os.getenv('TRAILING_STOP_PCT', '0.02'))  # 2% trailing stop
+TRAILING_STOP_PCT = float(os.getenv('TRAILING_STOP_PCT', '0.015'))  # 1.5% trailing stop
 
-# Backtesting parameters
+# Enhanced backtesting parameters
 BACKTEST_START_DATE = os.getenv('BACKTEST_START_DATE', '2023-01-01')
-BACKTEST_END_DATE = os.getenv('BACKTEST_END_DATE', '')  # Empty means use current date
+BACKTEST_END_DATE = os.getenv('BACKTEST_END_DATE', '')
 BACKTEST_INITIAL_BALANCE = float(os.getenv('BACKTEST_INITIAL_BALANCE', '50.0'))
-BACKTEST_COMMISSION = float(os.getenv('BACKTEST_COMMISSION', '0.0004'))  # 0.04% taker fee
-BACKTEST_USE_AUTO_COMPOUND = os.getenv('BACKTEST_USE_AUTO_COMPOUND', 'True').lower() == 'true'
+BACKTEST_COMMISSION = float(os.getenv('BACKTEST_COMMISSION', '0.0004'))
+BACKTEST_USE_AUTO_COMPOUND = os.getenv('BACKTEST_USE_AUTO_COMPOUND', 'False').lower() == 'true'  # Disabled for now
 
-# Pre-live backtest validation
+# Enhanced validation requirements - More realistic for 90-day backtests
 BACKTEST_BEFORE_LIVE = os.getenv('BACKTEST_BEFORE_LIVE', 'True').lower() == 'true'
-BACKTEST_MIN_PROFIT_PCT = float(os.getenv('BACKTEST_MIN_PROFIT_PCT', '5.0'))
-BACKTEST_MIN_WIN_RATE = float(os.getenv('BACKTEST_MIN_WIN_RATE', '40.0'))
-BACKTEST_PERIOD = os.getenv('BACKTEST_PERIOD', '15 days')
+BACKTEST_MIN_PROFIT_PCT = float(os.getenv('BACKTEST_MIN_PROFIT_PCT', '10.0'))  # Reduced for longer periods
+BACKTEST_MIN_WIN_RATE = float(os.getenv('BACKTEST_MIN_WIN_RATE', '40.0'))  # More realistic for 90 days
+BACKTEST_MAX_DRAWDOWN = float(os.getenv('BACKTEST_MAX_DRAWDOWN', '30.0'))  # Allow higher DD for longer periods
+BACKTEST_MIN_PROFIT_FACTOR = float(os.getenv('BACKTEST_MIN_PROFIT_FACTOR', '1.2'))  # More conservative
+BACKTEST_PERIOD = os.getenv('BACKTEST_PERIOD', '90 days')  # Default to 90 days for comprehensive testing
 
 # Logging and notifications
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')

@@ -322,7 +322,7 @@ class BinanceClient:
         logger.error("Maximum retries reached when getting symbol info")
         return None
     
-    def get_historical_klines(self, symbol, interval, start_str, end_str=None, limit=1000):
+    def get_historical_klines(self, symbol, interval, start_str, end_str=None, limit=None):
         """Get historical candlestick data"""
         max_retries = 5  # Increased from 3 to 5 for historical data
         backoff_factor = 5  # Increased backoff for historical data fetching
@@ -331,9 +331,16 @@ class BinanceClient:
         current_timeout = self.client.options.get('timeout', 60)
         
         # Temporarily increase timeout for historical data
-        self.client.options['timeout'] = 120  # 2-minute timeout for historical data
+        self.client.options['timeout'] = 180  # 3-minute timeout for large historical data
         
-        logger.info(f"Fetching historical klines for {symbol}, period: {start_str} to {end_str or 'now'}")
+        # If no limit specified, use Binance API safe limits
+        if limit is None:
+            limit = 1500  # Safe default for Binance API
+        else:
+            # Ensure we don't exceed Binance API limits
+            limit = min(limit, 1500)
+        
+        logger.info(f"Fetching historical klines for {symbol}, period: {start_str} to {end_str or 'now'}, limit: {limit}")
         
         for retry in range(max_retries):
             try:

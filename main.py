@@ -1387,12 +1387,41 @@ def run_backtest(symbol, timeframe, strategy_name, start_date, end_date=None, sa
         
         try:
             logger.info("Starting historical data request - this may take some time...")
+            # Calculate required candles for the period
+            if isinstance(start_date, str) and any(word in start_date for word in ['day', 'week', 'month', 'year']):
+                # Calculate candles needed based on timeframe and period
+                if '15m' in timeframe:
+                    candles_per_day = 96  # 24h * 4 (15min intervals)
+                elif '5m' in timeframe:
+                    candles_per_day = 288  # 24h * 12 (5min intervals)
+                elif '1h' in timeframe:
+                    candles_per_day = 24  # 24 hours
+                elif '4h' in timeframe:
+                    candles_per_day = 6   # 6 * 4h intervals
+                elif '1d' in timeframe:
+                    candles_per_day = 1   # 1 daily candle
+                else:
+                    candles_per_day = 96  # Default to 15m
+                
+                # Calculate total candles needed (add buffer for weekends/holidays)
+                total_days = num if 'num' in locals() else 90
+                required_candles = int(total_days * candles_per_day * 1.2)  # 20% buffer
+                
+                # Binance API has maximum limits, cap at 1500 for most intervals
+                required_candles = min(required_candles, 1500)
+                
+                logger.info(f"Requesting {required_candles} candles for {total_days} days on {timeframe} timeframe")
+            else:
+                # Default for date range backtests
+                required_candles = 1500
+            
+            # Use calculated limit with Binance API limits in mind
             klines = binance.get_historical_klines(
                 symbol=symbol,
                 interval=timeframe,
                 start_str=api_start_date,
                 end_str=end_date,
-                limit=1000
+                limit=required_candles  # Use calculated limit with API constraints
             )
             logger.info(f"Successfully retrieved {len(klines)} historical candles")
         except Exception as api_error:
