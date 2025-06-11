@@ -742,9 +742,32 @@ def check_for_signals(symbol=None):
             
         # Process signals with normal logic (BUY signal creates LONG position, SELL signal creates SHORT position)
         if signal == "BUY":  # Process BUY signal as BUY order
-            # Skip if already in a LONG position - don't close and reopen
+            # If already in a LONG position, update trailing stop loss instead of ignoring
             if position_amount > 0:
-                logger.info(f"Already in a LONG position ({position_amount}). Ignoring BUY signal.")
+                logger.info(f"Already in a LONG position ({position_amount}). Ignoring BUY signal. now update trailing stop loss")
+                
+                # Calculate trailing stop-loss for existing LONG position
+                new_stop = risk_manager.adjust_stop_loss_for_trailing(
+                    symbol, "BUY", current_price, position
+                )
+                
+                # Check if stop loss needs updating
+                if new_stop:
+                    # Cancel existing orders for this symbol
+                    binance_client.cancel_position_orders(symbol)
+                    time.sleep(0.5)  # Small delay to ensure orders are cancelled
+                    
+                    # Place new trailing stop loss (only moves in favorable direction)
+                    sl_order = binance_client.place_stop_loss_order(
+                        symbol, "SELL", abs(position['position_amount']), new_stop
+                    )
+                    if sl_order:
+                        logger.info(f"✅ Updated trailing stop loss to {new_stop} for LONG position")
+                    else:
+                        logger.error(f"❌ Failed to update stop loss order at {new_stop}")
+                else:
+                    logger.info("No trailing stop loss update needed for current price level")
+                
                 return
                 
             # Handle SHORT → LONG transition
@@ -854,9 +877,32 @@ def check_for_signals(symbol=None):
                     logger.error(f"❌ Failed to place BUY order!")
                     
         elif signal == "SELL":  # Process SELL signal as SELL order
-            # Skip if already in a SHORT position - don't close and reopen
+            # If already in a SHORT position, update trailing stop loss instead of ignoring
             if position_amount < 0:
-                logger.info(f"Already in a SHORT position ({position_amount}). Ignoring SELL signal.")
+                logger.info(f"Already in a SHORT position ({position_amount}). Ignoring SELL signal. now update trailing stop loss")
+                
+                # Calculate trailing stop-loss for existing SHORT position
+                new_stop = risk_manager.adjust_stop_loss_for_trailing(
+                    symbol, "SELL", current_price, position
+                )
+                
+                # Check if stop loss needs updating
+                if new_stop:
+                    # Cancel existing orders for this symbol
+                    binance_client.cancel_position_orders(symbol)
+                    time.sleep(0.5)  # Small delay to ensure orders are cancelled
+                    
+                    # Place new trailing stop loss (only moves in favorable direction)
+                    sl_order = binance_client.place_stop_loss_order(
+                        symbol, "BUY", abs(position['position_amount']), new_stop
+                    )
+                    if sl_order:
+                        logger.info(f"✅ Updated trailing stop loss to {new_stop} for SHORT position")
+                    else:
+                        logger.error(f"❌ Failed to update stop loss order at {new_stop}")
+                else:
+                    logger.info("No trailing stop loss update needed for current price level")
+                
                 return
                 
             # Handle LONG → SHORT transition
