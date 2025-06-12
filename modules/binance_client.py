@@ -735,3 +735,88 @@ class BinanceClient:
                 
         logger.info(f"Cancelled {cancelled} position-related orders for {symbol}")
         return cancelled
+
+    def close_all_positions_and_orders(self, symbol):
+        """
+        Close all positions and cancel all orders for a symbol
+        This is used when strategy signal is None
+        
+        Enhanced with retry logic and verification
+        
+        Returns:
+            dict: Status of operations performed
+        """
+        result = {
+            'orders_cancelled': 0,
+            'position_closed': False,
+            'position_amount': 0,
+            'close_order_id': None,
+            'errors': []
+        }
+        
+        try:
+            # Step 1: Get current position info
+            position_info = self.get_position_info(symbol)
+            if position_info:
+                result['position_amount'] = position_info.get('position_amount', 0)
+            
+            # Step 2: Cancel all open orders first
+            try:
+                cancelled_result = self.cancel_all_open_orders(symbol)
+                if cancelled_result:
+                    result['orders_cancelled'] = len(cancelled_result) if isinstance(cancelled_result, list) else 1
+                logger.info(f"Cancelled all orders for {symbol}")
+            except Exception as e:
+                error_msg = f"Failed to cancel orders for {symbol}: {e}"
+                logger.error(error_msg)
+                result['errors'].append(error_msg)
+            
+            # Step 3: Close position if it exists with retry logic
+            if position_info and abs(position_info.get('position_amount', 0)) > 0:
+                position_amount = position_info['position_amount']
+                
+                try:
+                    if position_amount > 0:
+                        # Close LONG position with SELL order
+                        close_side = "SELL"
+                        close_amount = position_amount
+                    else:
+                        # Close SHORT position with BUY order  
+                        close_side = "BUY"
+                        close_amount = abs(position_amount)
+                    
+                    # Place market order to close position with retry
+                    close_order = None
+                    for attempt in range(3):
+                        try:
+                            close_order = self.place_market_order(symbol, close_side, close_amount)
+                            if close_order:
+                                break
+                            logger.warning(f"Close order attempt {attempt+1}/3 returned empty result")
+                        except Exception as e:
+                            logger.warning(f"Close order attempt {attempt+1}/3 failed: {e}")
+                            if attempt < 2:  # Not the last attempt
+                                time.sleep(1)
+                    
+                    if close_order:
+                        result['position_closed'] = True
+                        result['close_order_id'] = close_order.get('orderId', 'unknown')
+                        logger.info(f"Successfully closed {close_side} position for {symbol} (Order ID: {result['close_order_id']})")
+                    else:
+                        error_msg = f"Failed to place close order for {symbol} after 3 attempts"
+                        logger.error(error_msg)
+                        result['errors'].append(error_msg)
+                        
+                except Exception as e:
+                    error_msg = f"Error closing position for {symbol}: {e}"
+                    logger.error(error_msg)
+                    result['errors'].append(error_msg)
+            else:
+                logger.info(f"No open position to close for {symbol}")
+                
+        except Exception as e:
+            error_msg = f"Unexpected error in close_all_positions_and_orders for {symbol}: {e}"
+            logger.error(error_msg)
+            result['errors'].append(error_msg)
+            
+        return result

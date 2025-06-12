@@ -619,8 +619,14 @@ class Backtester:
                         
                         signal = self.strategy.get_signal(klines_subset)
                         
-                        # Process signal - ENHANCED LOGIC TO PREVENT DUPLICATE POSITIONS
-                        if signal:
+                        # Handle None signal - Close any open positions
+                        if signal is None:
+                            if self.current_position:
+                                logger.debug(f"None signal received - closing position at {timestamp}")
+                                self.close_position(row, "None Signal")
+                        
+                        # Process trading signals - ENHANCED LOGIC TO PREVENT DUPLICATE POSITIONS
+                        elif signal:
                             logger.debug(f"Signal {signal} received at {timestamp}")
                             
                             if not self.current_position:

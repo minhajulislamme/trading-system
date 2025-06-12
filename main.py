@@ -735,6 +735,77 @@ def check_for_signals(symbol=None):
             logger.error("Binance client not initialized. Cannot place trades.")
             return
             
+        # Handle None signal - Close all positions and cancel all orders
+        if signal is None:
+            logger.info("🔄 Strategy signal is None - Closing all positions and canceling all orders")
+            
+            # Check if there are any open positions or orders to handle
+            if position and abs(position_amount) > 0:
+                try:
+                    # Use the comprehensive method to close positions and cancel orders
+                    result = binance_client.close_all_positions_and_orders(symbol)
+                    
+                    # Log the results
+                    if result['orders_cancelled'] > 0:
+                        logger.info(f"📋 Cancelled {result['orders_cancelled']} orders for {symbol}")
+                    
+                    if result['position_closed']:
+                        logger.info(f"✅ Successfully closed position for {symbol} (Order ID: {result['close_order_id']})")
+                        
+                        # Verify position was actually closed with retry logic
+                        position_verified_closed = False
+                        for attempt in range(3):
+                            time.sleep(1)  # Wait for order to process
+                            try:
+                                check_position = binance_client.get_position_info(symbol)
+                                if not check_position or abs(check_position.get('position_amount', 0)) < 0.0001:
+                                    logger.info(f"✅ Position closure verified for {symbol}")
+                                    position_verified_closed = True
+                                    break
+                                else:
+                                    logger.warning(f"⚠️ Position not fully closed yet, remaining: {check_position.get('position_amount', 0)} (attempt {attempt+1}/3)")
+                            except Exception as e:
+                                logger.warning(f"Error verifying position closure (attempt {attempt+1}/3): {e}")
+                        
+                        if not position_verified_closed:
+                            logger.error(f"❌ Failed to verify position closure for {symbol} after 3 attempts")
+                        
+                        # Send notification if Telegram is enabled
+                        try:
+                            notifier = TelegramNotifier()
+                            position_type = "LONG" if result['position_amount'] > 0 else "SHORT"
+                            status = "✅ Verified" if position_verified_closed else "⚠️ Unverified"
+                            notifier.send_message(f"🔄 *Position Closed*\n\n"
+                                                f"Symbol: {symbol}\n"
+                                                f"Reason: Strategy signal is None\n"
+                                                f"Closed: {abs(result['position_amount']):.6f} {symbol}\n"
+                                                f"Type: {position_type} position\n"
+                                                f"Status: {status}")
+                        except:
+                            logger.warning("Failed to send telegram notification for position closure")
+                    
+                    # Log any errors that occurred
+                    if result['errors']:
+                        for error in result['errors']:
+                            logger.error(f"❌ {error}")
+                            
+                except Exception as e:
+                    logger.error(f"❌ Error handling None signal: {e}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+            else:
+                # No positions to close, but still cancel any orders
+                try:
+                    cancelled_orders = binance_client.cancel_all_open_orders(symbol)
+                    if cancelled_orders:
+                        logger.info(f"📋 Cancelled all orders for {symbol} (no positions to close)")
+                    else:
+                        logger.info(f"ℹ️ No open positions or orders for {symbol}")
+                except Exception as e:
+                    logger.error(f"❌ Error cancelling orders when signal is None: {e}")
+            
+            return  # Exit early after handling None signal
+            
         # Process signals with normal logic (BUY signal creates LONG position, SELL signal creates SHORT position)
         if signal == "BUY":  # Process BUY signal as BUY order
             # If already in a LONG position, update trailing stop loss instead of ignoring
@@ -844,7 +915,6 @@ def check_for_signals(symbol=None):
                     
                     if not position_verified:
                         logger.warning(f"⚠️ Position verification failed after 3 attempts. Using fallback values.")
-                        logger.warning(f"Will attempt to place protective orders with fallback entry price: {entry_price}")
                     
                     # Always attempt to place protective orders, even if verification failed
                     try:
@@ -980,7 +1050,6 @@ def check_for_signals(symbol=None):
                     
                     if not position_verified:
                         logger.warning(f"⚠️ Position verification failed after 3 attempts. Using fallback values.")
-                        logger.warning(f"Will attempt to place protective orders with fallback entry price: {entry_price}")
                     
                     # Always attempt to place protective orders, even if verification failed
                     try:
@@ -1795,7 +1864,7 @@ def perform_test_trade(symbol=TRADING_SYMBOL):
                 position_qty = filled_qty
         
         # Final fallback - assume position opened (if we can't verify but buy order was accepted)
-        if not position_verified and buy_order:
+        if not position_verified and not buy_order:
             logger.warning("Could not definitively verify position was opened. Assuming successful buy and continuing with test sell.")
             position_verified = True
         
