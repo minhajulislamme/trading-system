@@ -19,18 +19,10 @@ class RiskManager:
     def __init__(self, binance_client):
         """Initialize risk manager with a reference to binance client"""
         self.binance_client = binance_client
-        self.current_market_condition = None  # Keeping for compatibility
         self.last_compound_time = None
         self.initial_balance = None
         self.last_balance = None
         self.position_size_multiplier = 1.0  # Default position size multiplier
-        
-    def set_market_condition(self, market_condition):
-        """Set the current market condition"""
-        if market_condition in ['BULLISH', 'BEARISH', 'SIDEWAYS']:
-            if self.current_market_condition != market_condition:
-                logger.info(f"Market condition changed to {market_condition}")
-                self.current_market_condition = market_condition
         
     def calculate_position_size(self, symbol, side, price, stop_loss_price=None):
         """
@@ -457,8 +449,7 @@ class RiskManager:
             'adjusted_margin_required': adjusted_margin_required,
             'max_safe_margin': max_safe_margin,
             'max_position_size_by_margin': max_margin_position_size,
-            'margin_sufficient': margin_sufficient,
-            'market_condition': self.current_market_condition
+            'margin_sufficient': margin_sufficient
         }
 
     def check_margin_sufficient(self, symbol, price, quantity):

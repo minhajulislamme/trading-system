@@ -432,7 +432,7 @@ class SmartTrendCatcher(TradingStrategy):
                 signal = 'BUY'
                 confidence_level = int(latest['bull_confluence'])
                 
-                logger.info(f"BUY Signal - Confluence: {confidence_level}, "
+                logger.info(f"🟢 BUY Signal - Confluence: {confidence_level}, "
                           f"RSI: {latest['rsi']:.1f}, "
                           f"MACD: {latest['macd_histogram']:.6f}, "
                           f"Volume Score: {latest.get('volume_score', 0)}, "
@@ -474,7 +474,7 @@ class SmartTrendCatcher(TradingStrategy):
                 signal = 'SELL'
                 confidence_level = int(latest['bear_confluence'])
                 
-                logger.info(f"SELL Signal - Confluence: {confidence_level}, "
+                logger.info(f"🔴 SELL Signal - Confluence: {confidence_level}, "
                           f"RSI: {latest['rsi']:.1f}, "
                           f"MACD: {latest['macd_histogram']:.6f}, "
                           f"Volume Score: {latest.get('volume_score', 0)}, "

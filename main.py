@@ -573,9 +573,6 @@ def on_order_update(order_data):
                 
                 # Get additional trade context
                 signal_reason = "Unknown"
-                market_condition = "Unknown"
-                if risk_manager and hasattr(risk_manager, 'current_market_condition'):
-                    market_condition = risk_manager.current_market_condition or "Unknown"
                     
                 # Try to get strategy name
                 strategy_name = STRATEGY
@@ -593,7 +590,6 @@ def on_order_update(order_data):
                     'commission_asset': order_data['commission_asset'],
                     'timestamp': datetime.now().isoformat(),
                     'balance': stats['current_balance'],
-                    'market_condition': market_condition,
                     'strategy': strategy_name,
                     'execution_type': order_type
                 }
@@ -631,9 +627,8 @@ def on_order_update(order_data):
                           f"Quantity: {filled_qty}\n" \
                           f"Price: {price}\n"
                 
-                # Add market condition and strategy info
-                message += f"Strategy: {strategy_name}\n" \
-                          f"Market Condition: {market_condition}\n"
+                # Add strategy info
+                message += f"Strategy: {strategy_name}\n"
                           
                 # Add profit/loss info if applicable
                 if realized_profit > 0:
