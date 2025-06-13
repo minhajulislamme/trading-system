@@ -199,8 +199,8 @@ class SmartTrendCatcher(TradingStrategy):
             # 1. Enhanced Trend Analysis
             df['ema_trend'] = ta.trend.ema_indicator(df['close'], window=self.ema_trend)
             df['ema_fast'] = ta.trend.ema_indicator(df['close'], window=self.ema_fast)
-            df['ema_trend'] = df['ema_trend'].bfill()
-            df['ema_fast'] = df['ema_fast'].bfill()
+            df['ema_trend'] = df['ema_trend'].ffill()
+            df['ema_fast'] = df['ema_fast'].ffill()
             
             # Multi-timeframe trend confirmation
             df['strong_uptrend'] = (df['close'] > df['ema_trend']) & (df['ema_fast'] > df['ema_trend'])
@@ -213,7 +213,7 @@ class SmartTrendCatcher(TradingStrategy):
             
             # 2. Enhanced RSI Analysis
             df['rsi'] = ta.momentum.rsi(df['close'], window=self.rsi_period)
-            df['rsi'] = df['rsi'].bfill()
+            df['rsi'] = df['rsi'].ffill()
             
             # RSI zones with confidence levels
             df['rsi_extreme_oversold'] = df['rsi'] < self.rsi_extreme_low
@@ -236,7 +236,7 @@ class SmartTrendCatcher(TradingStrategy):
             
             # Handle NaN values
             for col in ['macd', 'macd_signal_line', 'macd_histogram']:
-                df[col] = df[col].bfill()
+                df[col] = df[col].ffill()
             
             # MACD conditions with threshold
             df['macd_hist_positive'] = df['macd_histogram'] > self.macd_histogram_threshold
@@ -248,7 +248,7 @@ class SmartTrendCatcher(TradingStrategy):
             # 4. Enhanced Volume Analysis
             if self.volume_filter_enabled:
                 df['volume_sma'] = df['volume'].rolling(window=self.volume_period).mean()
-                df['volume_sma'] = df['volume_sma'].bfill()
+                df['volume_sma'] = df['volume_sma'].ffill()
                 
                 # Multiple volume conditions
                 df['volume_above_avg'] = df['volume'] > (df['volume_sma'] * self.volume_multiplier)
@@ -270,7 +270,7 @@ class SmartTrendCatcher(TradingStrategy):
             if self.atr_filter_enabled:
                 df['atr'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], 
                                                            window=self.atr_period)
-                df['atr'] = df['atr'].bfill()
+                df['atr'] = df['atr'].ffill()
                 df['atr_pct'] = (df['atr'] / df['close']) * 100
                 
                 # ATR conditions
@@ -309,8 +309,13 @@ class SmartTrendCatcher(TradingStrategy):
             
             # Price action conditions
             df['strong_candle'] = df['body_pct'] > self.min_candle_body_pct
-            df['reasonable_wicks'] = (df['upper_wick'] / df['candle_body'] < self.max_wick_ratio) & \
-                                   (df['lower_wick'] / df['candle_body'] < self.max_wick_ratio)
+            # Safe division to avoid division by zero on doji candles
+            df['reasonable_wicks'] = np.where(
+                df['candle_body'] > 0,
+                (df['upper_wick'] / df['candle_body'] < self.max_wick_ratio) & \
+                (df['lower_wick'] / df['candle_body'] < self.max_wick_ratio),
+                True  # Consider doji candles as having reasonable wicks
+            )
             df['bullish_candle'] = df['close'] > df['open']
             df['bearish_candle'] = df['close'] < df['open']
             
@@ -327,15 +332,13 @@ class SmartTrendCatcher(TradingStrategy):
             df.loc[df['bb_expansion'] & ~df['bb_squeeze'], 'bull_confluence'] += 1
             df.loc[df['strong_candle'] & df['bullish_candle'], 'bull_confluence'] += 1
             
-            # Add confluence points for bearish signals - IMPROVED for better SELL signal generation
+            # Add confluence points for bearish signals - BALANCED scoring (same as bullish)
             df.loc[df['strong_downtrend'], 'bear_confluence'] += 1
-            # RSI conditions for shorts - mutually exclusive to avoid double counting
-            df.loc[df['rsi'] > self.rsi_extreme_high, 'bear_confluence'] += 2  # High RSI gets more weight
-            df.loc[(df['rsi'] > self.rsi_recovery) & (df['rsi'] <= self.rsi_extreme_high), 'bear_confluence'] += 1  # Medium RSI
-            df.loc[df['rsi_decreasing'], 'bear_confluence'] += 1               # RSI momentum turning down
-            # MACD conditions - mutually exclusive
-            df.loc[df['macd_hist_negative'] & df['macd_hist_decreasing'], 'bear_confluence'] += 2  # Both conditions get more weight
-            df.loc[df['macd_hist_negative'] & ~df['macd_hist_decreasing'], 'bear_confluence'] += 1  # Just negative MACD
+            # RSI conditions - simplified and balanced (no extra weighting)
+            df.loc[df['rsi'] > self.rsi_extreme_high, 'bear_confluence'] += 1  # High RSI (same weight as bullish)
+            df.loc[df['rsi_decreasing'] & (df['rsi'] > self.rsi_recovery), 'bear_confluence'] += 1  # RSI momentum turning down
+            # MACD conditions - balanced (same weight as bullish)
+            df.loc[df['macd_hist_negative'] & df['macd_hist_decreasing'], 'bear_confluence'] += 1  # MACD bearish (same weight)
             df.loc[df['volume_score'] >= 2, 'bear_confluence'] += 1
             df.loc[df['volatility_score'] >= 2, 'bear_confluence'] += 1
             df.loc[df['bb_expansion'] & ~df['bb_squeeze'], 'bear_confluence'] += 1
@@ -381,7 +384,7 @@ class SmartTrendCatcher(TradingStrategy):
                 df[col] = pd.to_numeric(df[col], errors='coerce')
                 if df[col].isna().any():
                     logger.warning(f"Cleaning NaN values in {col}")
-                    df[col] = df[col].ffill().bfill()
+                    df[col] = df[col].ffill()  # Only forward fill to avoid look-ahead bias
             
             if df[numeric_columns].isna().any().any():
                 logger.error("Failed to clean price data")
@@ -411,35 +414,37 @@ class SmartTrendCatcher(TradingStrategy):
             confidence_level = 0
             
             # BUY Signal: Strong uptrend + sufficient confluence
-            if (bool(latest['strong_uptrend']) and 
-                int(latest['bull_confluence']) >= self.confluence_required):
+            strong_uptrend = latest['strong_uptrend']
+            bull_confluence = int(latest['bull_confluence'])
+            
+            if (strong_uptrend and bull_confluence >= self.confluence_required):
                 
                 # Additional confirmations for higher confidence
                 extra_confirmations = []
                 
                 # RSI pullback recovery
-                if (bool(previous.get('rsi_pullback_zone', False)) and 
-                    bool(latest.get('rsi_recovery_bull', False))):
+                if (previous.get('rsi_pullback_zone', False) and 
+                    latest.get('rsi_recovery_bull', False)):
                     extra_confirmations.append("RSI Recovery")
                 
                 # Extreme RSI for higher confidence
-                if bool(previous.get('rsi_extreme_oversold', False)):
+                if previous.get('rsi_extreme_oversold', False):
                     extra_confirmations.append("Extreme RSI")
                 
                 # Volume surge
-                if bool(latest.get('volume_surge', False)):
+                if latest.get('volume_surge', False):
                     extra_confirmations.append("Volume Surge")
                 
                 # MACD strong momentum
-                if bool(latest.get('macd_strong_momentum', False)):
+                if latest.get('macd_strong_momentum', False):
                     extra_confirmations.append("Strong MACD")
                 
                 # Bollinger Band breakout
-                if bool(latest.get('bb_breakout_up', False)):
+                if latest.get('bb_breakout_up', False):
                     extra_confirmations.append("BB Breakout")
                 
                 signal = 'BUY'
-                confidence_level = int(latest['bull_confluence'])
+                confidence_level = bull_confluence
                 
                 logger.info(f"🟢 BUY Signal - Confluence: {confidence_level}, "
                           f"RSI: {latest['rsi']:.1f}, "
@@ -447,13 +452,12 @@ class SmartTrendCatcher(TradingStrategy):
                           f"Volume Score: {latest.get('volume_score', 0)}, "
                           f"Extras: {', '.join(extra_confirmations) if extra_confirmations else 'None'}")
             
-            # SELL Signal: Enhanced conditions for better signal generation  
+            # SELL Signal: Balanced conditions (same requirements as BUY)
             elif (
-                # Primary condition: Either strong downtrend OR high RSI with momentum turning down
-                (bool(latest['strong_downtrend']) or 
-                 (latest['rsi'] > self.rsi_extreme_high and bool(latest.get('rsi_decreasing', False)))) and 
-                # Confluence requirement (lower threshold for more signals)
-                int(latest['bear_confluence']) >= max(1, self.confluence_required - 1)
+                # Primary condition: Strong downtrend (same as BUY requirement)
+                latest['strong_downtrend'] and 
+                # Confluence requirement (SAME as BUY - no reduction)
+                int(latest['bear_confluence']) >= self.confluence_required
             ):
                 
                 # Additional confirmations
@@ -465,19 +469,19 @@ class SmartTrendCatcher(TradingStrategy):
                     extra_confirmations.append("RSI Recovery")
                 
                 # Extreme RSI for higher confidence
-                if bool(previous.get('rsi_extreme_overbought', False)):
+                if previous.get('rsi_extreme_overbought', False):
                     extra_confirmations.append("Extreme RSI")
                 
                 # Volume surge
-                if bool(latest.get('volume_surge', False)):
+                if latest.get('volume_surge', False):
                     extra_confirmations.append("Volume Surge")
                 
                 # MACD strong momentum
-                if bool(latest.get('macd_strong_momentum', False)):
+                if latest.get('macd_strong_momentum', False):
                     extra_confirmations.append("Strong MACD")
                 
                 # Bollinger Band breakout
-                if bool(latest.get('bb_breakout_down', False)):
+                if latest.get('bb_breakout_down', False):
                     extra_confirmations.append("BB Breakout")
                 
                 signal = 'SELL'
@@ -519,7 +523,6 @@ class SmartTrendCatcher(TradingStrategy):
             # else: use base multiplier for minimum confidence
             
             # Cap at maximum
-            OLD_DEFAULT_POSITION_PCT = 0.75
             max_multiplier = self.max_position_pct / OLD_DEFAULT_POSITION_PCT
             multiplier = min(multiplier, max_multiplier)
             
@@ -528,8 +531,7 @@ class SmartTrendCatcher(TradingStrategy):
             
         except Exception as e:
             logger.error(f"Error calculating position size multiplier: {e}")
-            OLD_DEFAULT_POSITION_PCT = 0.75
-            return self.base_position_pct / OLD_DEFAULT_POSITION_PCT  # Safe default
+            return self.base_position_pct / 0.75  # Safe default
 
 # Factory function to get a strategy by name
 def get_strategy(strategy_name):
@@ -553,13 +555,13 @@ def get_strategy(strategy_name):
             rsi_pullback_high=50,
             rsi_recovery=50,
             rsi_extreme_high=rsi_extreme_high,  # Use config value
-            # False signal reduction parameters
+            # False signal reduction parameters - Match class defaults
             volume_filter_enabled=True,
             volume_period=20,
-            volume_multiplier=1.2,
+            volume_multiplier=1.5,  # Match class default instead of 1.2
             atr_filter_enabled=True,
             atr_period=14,
-            atr_threshold=0.5
+            atr_threshold=0.8  # Match class default instead of 0.5
         ),
     }
     
