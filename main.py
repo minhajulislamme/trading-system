@@ -734,9 +734,58 @@ def check_for_signals(symbol=None):
         if not binance_client:
             logger.error("Binance client not initialized. Cannot place trades.")
             return
+        
+        # Handle None signal - close any open positions
+        if signal is None:
+            logger.info("Signal is None - checking for open positions to close")
+            
+            if position and abs(position['position_amount']) > 0:
+                position_side = "LONG" if position['position_amount'] > 0 else "SHORT"
+                logger.info(f"Closing {position_side} position due to None signal")
+                
+                # Cancel all existing orders for this symbol first
+                cancelled = binance_client.cancel_position_orders(symbol)
+                logger.info(f"Cancelled {cancelled} existing orders for {symbol}")
+                time.sleep(0.5)  # Small delay to ensure orders are cancelled
+                
+                # Determine the order side to close the position
+                close_side = "SELL" if position['position_amount'] > 0 else "BUY"
+                close_amount = abs(position['position_amount'])
+                
+                # Place market order to close the position
+                logger.info(f"Placing {close_side} order to close {position_side} position: {close_amount} {symbol}")
+                close_order = binance_client.place_market_order(symbol, close_side, close_amount)
+                
+                if close_order:
+                    order_id = close_order.get('orderId', 'unknown')
+                    logger.info(f"✅ Successfully closed {position_side} position with order ID: {order_id}")
+                    
+                    # Send notification about position closure
+                    notifier = TelegramNotifier()
+                    message = f"🔄 *Position Closed (Signal: None)*\n\n" \
+                             f"Symbol: {symbol}\n" \
+                             f"Side: {position_side}\n" \
+                             f"Size: {close_amount}\n" \
+                             f"Price: ~{current_price}\n" \
+                             f"Reason: No clear signal detected"
+                    notifier.send_message(message)
+                    
+                    # Verify position was closed
+                    time.sleep(1)
+                    updated_position = binance_client.get_position_info(symbol)
+                    if updated_position and abs(updated_position['position_amount']) > 0.0001:
+                        logger.warning(f"⚠️ Position not fully closed. Remaining: {updated_position['position_amount']}")
+                    else:
+                        logger.info(f"✅ Position fully closed for {symbol}")
+                else:
+                    logger.error(f"❌ Failed to close {position_side} position!")
+            else:
+                logger.info("No open position to close")
+            
+            return  # Exit early when signal is None
             
         # Process signals with normal logic (BUY signal creates LONG position, SELL signal creates SHORT position)
-        if signal == "BUY":  # Process BUY signal as BUY order
+        elif signal == "BUY":  # Process BUY signal as BUY order
             # If already in a LONG position, update trailing stop loss instead of ignoring
             if position_amount > 0:
                 logger.info(f"Already in a LONG position ({position_amount}). Ignoring BUY signal. now update trailing stop loss")
@@ -1008,7 +1057,8 @@ def check_for_signals(symbol=None):
                     logger.error(f"❌ Failed to place SELL order!")
         
         # Handle trailing stops and take profits for existing positions - for current symbol only in multi-instance mode
-        if position and abs(position['position_amount']) > 0 and position['symbol'] == symbol:
+        # Skip this section if signal is None since we already handled position closure above
+        if signal is not None and position and abs(position['position_amount']) > 0 and position['symbol'] == symbol:
             position_side = "LONG" if position['position_amount'] > 0 else "SHORT"
             logger.info(f"Managing existing {position_side} position for {symbol} with size {abs(position['position_amount'])}, received {signal} signal")
             

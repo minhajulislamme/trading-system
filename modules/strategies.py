@@ -167,7 +167,8 @@ class SmartTrendCatcher(TradingStrategy):
         self.confidence_multiplier = confidence_multiplier
         
         # Trading state tracking
-        pass
+        self._last_confidence = confluence_required
+        self._warning_count = 0
         
         logger.info(f"Enhanced {self.name} initialized with:")
         logger.info(f"  Trend EMAs: {ema_fast}/{ema_trend}")
@@ -184,6 +185,16 @@ class SmartTrendCatcher(TradingStrategy):
             if len(df) < min_required:
                 logger.warning(f"Insufficient data: need {min_required}, got {len(df)}")
                 return df
+            
+            # Validate required columns exist
+            required_cols = ['open', 'high', 'low', 'close', 'volume']
+            for col in required_cols:
+                if col not in df.columns:
+                    logger.error(f"Missing required column: {col}")
+                    return df
+                if df[col].isna().all():
+                    logger.error(f"Column {col} contains only NaN values")
+                    return df
             
             # 1. Enhanced Trend Analysis
             df['ema_trend'] = ta.trend.ema_indicator(df['close'], window=self.ema_trend)
@@ -318,13 +329,13 @@ class SmartTrendCatcher(TradingStrategy):
             
             # Add confluence points for bearish signals - IMPROVED for better SELL signal generation
             df.loc[df['strong_downtrend'], 'bear_confluence'] += 1
-            # More aggressive RSI conditions for shorts
-            df.loc[df['rsi'] > self.rsi_extreme_high, 'bear_confluence'] += 1  # RSI > 75
-            df.loc[df['rsi'] > self.rsi_recovery, 'bear_confluence'] += 1      # RSI > 55
+            # RSI conditions for shorts - mutually exclusive to avoid double counting
+            df.loc[df['rsi'] > self.rsi_extreme_high, 'bear_confluence'] += 2  # High RSI gets more weight
+            df.loc[(df['rsi'] > self.rsi_recovery) & (df['rsi'] <= self.rsi_extreme_high), 'bear_confluence'] += 1  # Medium RSI
             df.loc[df['rsi_decreasing'], 'bear_confluence'] += 1               # RSI momentum turning down
-            df.loc[df['macd_hist_negative'] & df['macd_hist_decreasing'], 'bear_confluence'] += 1
-            # Add MACD turning negative as a bear signal
-            df.loc[df['macd_hist_negative'], 'bear_confluence'] += 1
+            # MACD conditions - mutually exclusive
+            df.loc[df['macd_hist_negative'] & df['macd_hist_decreasing'], 'bear_confluence'] += 2  # Both conditions get more weight
+            df.loc[df['macd_hist_negative'] & ~df['macd_hist_decreasing'], 'bear_confluence'] += 1  # Just negative MACD
             df.loc[df['volume_score'] >= 2, 'bear_confluence'] += 1
             df.loc[df['volatility_score'] >= 2, 'bear_confluence'] += 1
             df.loc[df['bb_expansion'] & ~df['bb_squeeze'], 'bear_confluence'] += 1
@@ -349,12 +360,10 @@ class SmartTrendCatcher(TradingStrategy):
             min_required = max(self.ema_trend, self.macd_slow, self.volume_period, 
                              self.atr_period, self.bb_period) + 20
             if not klines or len(klines) < min_required:
-                # Only show warning every 10th time to reduce log spam
-                if not hasattr(self, '_warning_count'):
-                    self._warning_count = 0
-                self._warning_count += 1
-                if self._warning_count % 10 == 1:
+                # Show warning every 10th time to reduce log spam
+                if self._warning_count % 10 == 0:
                     logger.warning(f"Insufficient data for enhanced signal generation (need {min_required}, have {len(klines) if klines else 0})")
+                self._warning_count += 1
                 return None
             
             # Convert and validate data
@@ -450,9 +459,9 @@ class SmartTrendCatcher(TradingStrategy):
                 # Additional confirmations
                 extra_confirmations = []
                 
-                # RSI pullback recovery for shorts
-                if (previous['rsi'] >= self.rsi_recovery and 
-                    bool(latest.get('rsi_recovery_bear', False))):
+                # RSI overbought recovery for shorts (price coming down from overbought)
+                if (previous['rsi'] > self.rsi_extreme_high and 
+                    latest['rsi'] < previous['rsi'] and latest['rsi'] > self.rsi_recovery):
                     extra_confirmations.append("RSI Recovery")
                 
                 # Extreme RSI for higher confidence
@@ -498,8 +507,9 @@ class SmartTrendCatcher(TradingStrategy):
         try:
             confidence = getattr(self, '_last_confidence', self.confluence_required)
             
-            # Base multiplier
-            multiplier = self.base_position_pct / 0.75  # Normalize to old default
+            # Base multiplier (normalize from old 75% default to current base_position_pct)
+            OLD_DEFAULT_POSITION_PCT = 0.75
+            multiplier = self.base_position_pct / OLD_DEFAULT_POSITION_PCT
             
             # Adjust based on confidence
             if confidence >= self.confluence_required + 2:  # High confidence
@@ -509,7 +519,8 @@ class SmartTrendCatcher(TradingStrategy):
             # else: use base multiplier for minimum confidence
             
             # Cap at maximum
-            max_multiplier = self.max_position_pct / 0.75
+            OLD_DEFAULT_POSITION_PCT = 0.75
+            max_multiplier = self.max_position_pct / OLD_DEFAULT_POSITION_PCT
             multiplier = min(multiplier, max_multiplier)
             
             logger.info(f"Position size multiplier: {multiplier:.2f} (confidence: {confidence})")
@@ -517,27 +528,31 @@ class SmartTrendCatcher(TradingStrategy):
             
         except Exception as e:
             logger.error(f"Error calculating position size multiplier: {e}")
-            return self.base_position_pct / 0.75  # Safe default
+            OLD_DEFAULT_POSITION_PCT = 0.75
+            return self.base_position_pct / OLD_DEFAULT_POSITION_PCT  # Safe default
 
 # Factory function to get a strategy by name
 def get_strategy(strategy_name):
     """Factory function to get a strategy by name"""
     try:
         from modules.config import RSI_PERIOD, RSI_OVERBOUGHT, RSI_OVERSOLD
+        # Use config values for consistency
+        rsi_extreme_high = RSI_OVERBOUGHT if RSI_OVERBOUGHT else 70
+        rsi_period = RSI_PERIOD if RSI_PERIOD else 14
     except ImportError:
         # Default values if config import fails
-        RSI_PERIOD = 14
-        RSI_OVERBOUGHT = 70
-        RSI_OVERSOLD = 30
+        rsi_period = 14
+        rsi_extreme_high = 70
+        logger.warning("Could not import RSI config values, using defaults")
     
     strategies = {
         'SmartTrendCatcher': SmartTrendCatcher(
             ema_trend=50,
-            rsi_period=RSI_PERIOD,
+            rsi_period=rsi_period,
             rsi_pullback_low=30,
             rsi_pullback_high=50,
             rsi_recovery=50,
-            rsi_extreme_high=70,  # Lower for more SELL signals
+            rsi_extreme_high=rsi_extreme_high,  # Use config value
             # False signal reduction parameters
             volume_filter_enabled=True,
             volume_period=20,
