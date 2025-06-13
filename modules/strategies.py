@@ -331,6 +331,8 @@ class SmartTrendCatcher(TradingStrategy):
             df.loc[df['volatility_score'] >= 2, 'bull_confluence'] += 1
             df.loc[df['bb_expansion'] & ~df['bb_squeeze'], 'bull_confluence'] += 1
             df.loc[df['strong_candle'] & df['bullish_candle'], 'bull_confluence'] += 1
+            # Add price above EMAs as bull signal (balanced with bear signal)
+            df.loc[df['close'] > df['ema_fast'], 'bull_confluence'] += 1
             
             # Add confluence points for bearish signals - BALANCED scoring (same as bullish)
             df.loc[df['strong_downtrend'], 'bear_confluence'] += 1
