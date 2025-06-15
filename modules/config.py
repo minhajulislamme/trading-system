@@ -33,7 +33,7 @@ STRATEGY = os.getenv('STRATEGY', 'SmartTrendCatcher')
 
 # Position sizing - Enhanced risk management (aligned with SmartTrendCatcher)
 INITIAL_BALANCE = float(os.getenv('INITIAL_BALANCE', '50.0'))
-FIXED_TRADE_PERCENTAGE = float(os.getenv('FIXED_TRADE_PERCENTAGE', '0.30'))  # 30% to match BASE_POSITION_PCT
+FIXED_TRADE_PERCENTAGE = float(os.getenv('FIXED_TRADE_PERCENTAGE', '0.30'))  # 30% to match strategy BASE_POSITION_PCT
 MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '3'))  # Conservative for better risk management
 
 # Margin safety settings - More conservative
@@ -63,8 +63,8 @@ RSI_EXTREME_HIGH = int(os.getenv('RSI_EXTREME_HIGH', '70'))
 # EMA parameters
 EMA_TREND = int(os.getenv('EMA_TREND', '50'))
 EMA_FAST = int(os.getenv('EMA_FAST', '21'))
-FAST_EMA = int(os.getenv('FAST_EMA', '8'))  # Legacy compatibility
-SLOW_EMA = int(os.getenv('SLOW_EMA', '21'))  # Legacy compatibility
+FAST_EMA = int(os.getenv('FAST_EMA', '8'))  # Used by SmartTrendCatcher
+SLOW_EMA = int(os.getenv('SLOW_EMA', '21'))  # Used by SmartTrendCatcher
 
 # MACD parameters
 MACD_FAST = int(os.getenv('MACD_FAST', '12'))
@@ -94,7 +94,7 @@ MIN_CANDLE_BODY_PCT = float(os.getenv('MIN_CANDLE_BODY_PCT', '0.5'))
 MAX_WICK_RATIO = float(os.getenv('MAX_WICK_RATIO', '3.0'))
 
 # Confluence and confidence parameters
-CONFLUENCE_REQUIRED = int(os.getenv('CONFLUENCE_REQUIRED', '1'))
+CONFLUENCE_REQUIRED = int(os.getenv('CONFLUENCE_REQUIRED', '2'))  # Changed default from 1 to 2
 BASE_POSITION_PCT = float(os.getenv('BASE_POSITION_PCT', '0.3'))  # 30% base position
 MAX_POSITION_PCT = float(os.getenv('MAX_POSITION_PCT', '0.5'))    # 50% max position
 CONFIDENCE_MULTIPLIER = float(os.getenv('CONFIDENCE_MULTIPLIER', '1.5'))
@@ -130,11 +130,12 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
 SEND_DAILY_REPORT = os.getenv('SEND_DAILY_REPORT', 'True').lower() == 'true'
 DAILY_REPORT_TIME = os.getenv('DAILY_REPORT_TIME', '00:00')  # 24-hour format
 
-# Fast trading mode configuration
-FAST_TRADING_MODE = os.getenv('FAST_TRADING_MODE', 'True').lower() == 'true'
-FAST_CHECK_INTERVAL = int(os.getenv('FAST_CHECK_INTERVAL', '30'))  # 30 seconds in fast mode
-ENABLE_QUICK_SIGNALS = os.getenv('ENABLE_QUICK_SIGNALS', 'True').lower() == 'true'
-
 # Other settings
 RETRY_COUNT = int(os.getenv('RETRY_COUNT', '3'))
 RETRY_DELAY = int(os.getenv('RETRY_DELAY', '5'))  # seconds
+
+# Additional SmartTrendCatcher specific parameters
+VOLUME_SURGE_MULTIPLIER = float(os.getenv('VOLUME_SURGE_MULTIPLIER', '2.0'))
+ATR_TREND_FACTOR = float(os.getenv('ATR_TREND_FACTOR', '1.2'))
+MIN_CANDLE_BODY_PCT = float(os.getenv('MIN_CANDLE_BODY_PCT', '0.5'))
+MAX_WICK_RATIO = float(os.getenv('MAX_WICK_RATIO', '3.0'))

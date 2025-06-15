@@ -160,4 +160,4 @@ Enhanced momentum filtering for trend confirmation
 
     cd /home/minhajulislam/tradingbot && python3 main.py --backtest --symbol RAYSOLUSDT --strategy SmartTrendCatcher --start-date "30 days ago"
 
-python3 main.py --backtest --symbol RAYSOLUSDT --strategy SmartTrendCatcher --start-date "30 days ago"
+python3 main.py --backtest --symbol SUIUSDT --strategy SmartTrendCatcher --start-date "30 days ago"

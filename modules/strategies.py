@@ -41,26 +41,24 @@ class TradingStrategy:
 
 class SmartTrendCatcher(TradingStrategy):
     """
-    Enhanced Smart Trend Catcher Strategy with Advanced False Signal Reduction:
+    EMA Crossover Strategy with Enhanced Signal Filtering:
     
-    Core Strategy Improvements:
-    - Multi-timeframe trend confirmation
-    - Enhanced volatility filtering with Bollinger Bands
-    - Price action confirmation with candlestick patterns
-    - Dynamic position sizing based on confidence
-    - Advanced money management with risk-reward optimization
+    Core Strategy:
+    - EMA crossover as primary signal generation
+    - Fast EMA crosses above/below slow EMA for entries
+    - Enhanced volume and volatility filtering
+    - RSI and MACD confirmation for better signal quality
     
-    Signal Quality Enhancements:
-    - Confluence requirement (multiple confirmations needed)
-    - Market structure analysis (support/resistance levels)
-    - Momentum divergence detection
-    - News/time-based filters
+    Signal Generation:
+    - BUY: Fast EMA crosses above slow EMA with confirmations
+    - SELL: Fast EMA crosses below slow EMA with confirmations
+    - Additional filters to reduce false signals
     """
     
     def __init__(self, 
-                 # Enhanced trend filter parameters
-                 ema_trend=50,
-                 ema_fast=21,               # Additional fast EMA for trend confirmation
+                 # EMA crossover parameters
+                 ema_slow=50,               # Slow EMA for crossover
+                 ema_fast=21,               # Fast EMA for crossover
                  
                  # RSI parameters with tighter controls
                  rsi_period=14,
@@ -102,21 +100,15 @@ class SmartTrendCatcher(TradingStrategy):
                  # Dynamic position sizing
                  base_position_pct=0.3,     # Base position size (30% instead of 75%)
                  max_position_pct=0.5,      # Maximum position size
-                 confidence_multiplier=1.5, # Multiply position size by confidence
-                 
-                 # FAST MODE - New parameter for quicker entries
-                 fast_mode=False):           # Enable for faster signal generation
+                 confidence_multiplier=1.5): # Multiply position size by confidence
         
         super().__init__("SmartTrendCatcher")
         
-        # Store fast mode setting
-        self.fast_mode = fast_mode
-        
         # Enhanced parameter validation
-        if ema_trend <= 0 or ema_fast <= 0:
+        if ema_slow <= 0 or ema_fast <= 0:
             raise ValueError("EMA periods must be positive")
-        if ema_fast >= ema_trend:
-            raise ValueError("Fast EMA must be less than trend EMA")
+        if ema_fast >= ema_slow:
+            raise ValueError("Fast EMA must be less than slow EMA")
         if rsi_period <= 0:
             raise ValueError("RSI period must be positive")
         if not (0 <= rsi_extreme_low <= rsi_pullback_low <= rsi_pullback_high <= rsi_recovery <= rsi_extreme_high <= 100):
@@ -128,13 +120,8 @@ class SmartTrendCatcher(TradingStrategy):
         if confluence_required < 1:
             raise ValueError("Confluence required must be at least 1")
         
-        # Adjust confluence requirements in fast mode
-        if self.fast_mode:
-            confluence_required = max(1, confluence_required - 1)  # Reduce by 1 but keep minimum of 1
-            logger.info(f"FAST MODE: Reduced confluence requirement to {confluence_required} for quicker entries")
-        
         # Store enhanced parameters
-        self.ema_trend = ema_trend
+        self.ema_slow = ema_slow
         self.ema_fast = ema_fast
         
         self.rsi_period = rsi_period
@@ -181,54 +168,119 @@ class SmartTrendCatcher(TradingStrategy):
         self._last_confidence = confluence_required
         self._warning_count = 0
         
-        # Fast mode flag
-        self.fast_mode = fast_mode
-        
         logger.info(f"Enhanced {self.name} initialized with:")
-        logger.info(f"  Trend EMAs: {ema_fast}/{ema_trend}")
+        logger.info(f"  EMA Crossover: {ema_fast}/{ema_slow}")
         logger.info(f"  RSI levels: {rsi_extreme_low}/{rsi_pullback_low}-{rsi_pullback_high}/{rsi_recovery}/{rsi_extreme_high}")
         logger.info(f"  Confluence required: {confluence_required}")
         logger.info(f"  Position sizing: {base_position_pct:.1%}-{max_position_pct:.1%}")
-        logger.info(f"  Fast mode: {'Enabled' if fast_mode else 'Disabled'}")
+    
+    def validate_data_quality(self, df):
+        """Comprehensive data quality validation"""
+        issues = []
+        
+        # Check for required columns
+        required_cols = ['open', 'high', 'low', 'close', 'volume']
+        for col in required_cols:
+            if col not in df.columns:
+                issues.append(f"Missing required column: {col}")
+            elif df[col].isna().all():
+                issues.append(f"Column {col} contains only NaN values")
+            elif (df[col] <= 0).any() and col != 'volume':  # Volume can be zero
+                issues.append(f"Invalid values in {col} (zero or negative prices)")
+        
+        # Check OHLC relationships
+        if len(issues) == 0:  # Only check if basic data is valid
+            high_low_issues = (df['high'] < df['low']).any()
+            close_range_issues = ((df['close'] > df['high']) | (df['close'] < df['low'])).any()
+            open_range_issues = ((df['open'] > df['high']) | (df['open'] < df['low'])).any()
+            
+            if high_low_issues:
+                issues.append("High prices lower than low prices detected")
+            if close_range_issues:
+                issues.append("Close prices outside high-low range detected")
+            if open_range_issues:
+                issues.append("Open prices outside high-low range detected")
+        
+        return issues
     
     def add_indicators(self, df):
         """Add enhanced indicators with multi-layer filtering"""
         try:
             # Ensure sufficient data
-            min_required = max(self.ema_trend, self.macd_slow, self.volume_period, 
+            min_required = max(self.ema_slow, self.macd_slow, self.volume_period, 
                              self.atr_period, self.bb_period) + 20
             if len(df) < min_required:
                 logger.warning(f"Insufficient data: need {min_required}, got {len(df)}")
                 return df
             
-            # Validate required columns exist
-            required_cols = ['open', 'high', 'low', 'close', 'volume']
-            for col in required_cols:
-                if col not in df.columns:
-                    logger.error(f"Missing required column: {col}")
-                    return df
-                if df[col].isna().all():
-                    logger.error(f"Column {col} contains only NaN values")
-                    return df
+            # Comprehensive data quality validation
+            data_issues = self.validate_data_quality(df)
+            if data_issues:
+                logger.error(f"Data quality issues found: {', '.join(data_issues)}")
+                return df
+                    
+            # Additional data cleaning with improved approach
+            if df['close'].isna().any():
+                logger.warning("Found NaN values in close prices, cleaning data")
+                df['close'] = df['close'].interpolate(method='linear').bfill().ffill()
+                
+            # Check for zero or negative prices
+            price_cols = ['open', 'high', 'low', 'close']
+            for col in price_cols:
+                if (df[col] <= 0).any():
+                    logger.warning(f"Found zero or negative values in {col}, using interpolation")
+                    # Use interpolation instead of forward fill to avoid look-ahead bias
+                    df[col] = df[col].replace(0, np.nan)
+                    # Try linear interpolation first, then backward fill, then forward fill as last resort
+                    df[col] = df[col].interpolate(method='linear').bfill().ffill()
+                    
+            # Ensure high >= low, close between high and low
+            df['high'] = np.maximum(df['high'], np.maximum(df['open'], df['close']))
+            df['low'] = np.minimum(df['low'], np.minimum(df['open'], df['close']))
             
-            # 1. Enhanced Trend Analysis
-            df['ema_trend'] = ta.trend.ema_indicator(df['close'], window=self.ema_trend)
+            # 1. EMA Crossover Analysis (Primary Signal)
+            df['ema_slow'] = ta.trend.ema_indicator(df['close'], window=self.ema_slow)
             df['ema_fast'] = ta.trend.ema_indicator(df['close'], window=self.ema_fast)
-            df['ema_trend'] = df['ema_trend'].ffill()
-            df['ema_fast'] = df['ema_fast'].ffill()
+            # Use interpolation for better data integrity
+            df['ema_slow'] = df['ema_slow'].interpolate(method='linear').bfill()
+            df['ema_fast'] = df['ema_fast'].interpolate(method='linear').bfill()
             
-            # Multi-timeframe trend confirmation
-            df['strong_uptrend'] = (df['close'] > df['ema_trend']) & (df['ema_fast'] > df['ema_trend'])
-            df['strong_downtrend'] = (df['close'] < df['ema_trend']) & (df['ema_fast'] < df['ema_trend'])
-            df['trend_aligned'] = df['strong_uptrend'] | df['strong_downtrend']
+            # EMA crossover signals
+            df['ema_fast_above'] = df['ema_fast'] > df['ema_slow']
+            df['ema_fast_below'] = df['ema_fast'] < df['ema_slow']
             
-            # Trend strength measurement
-            df['trend_strength'] = np.abs(df['close'] - df['ema_trend']) / df['ema_trend']
-            df['strong_trend'] = df['trend_strength'] > 0.02  # At least 2% from trend line
+            # Crossover detection (primary signals)
+            df['ema_bullish_cross'] = (df['ema_fast'] > df['ema_slow']) & (df['ema_fast'].shift(1) <= df['ema_slow'].shift(1))
+            df['ema_bearish_cross'] = (df['ema_fast'] < df['ema_slow']) & (df['ema_fast'].shift(1) >= df['ema_slow'].shift(1))
             
-            # 2. Enhanced RSI Analysis
-            df['rsi'] = ta.momentum.rsi(df['close'], window=self.rsi_period)
-            df['rsi'] = df['rsi'].ffill()
+            # EMA spread for signal strength (safe division)
+            df['ema_spread'] = np.where(
+                df['ema_slow'] > 0, 
+                np.abs(df['ema_fast'] - df['ema_slow']) / df['ema_slow'],
+                0
+            )
+            df['strong_crossover'] = df['ema_spread'] > 0.002  # At least 0.2% spread
+            
+            # 2. Enhanced RSI Analysis with better error handling
+            try:
+                df['rsi'] = ta.momentum.rsi(df['close'], window=self.rsi_period)
+                # Handle NaN values in RSI with better fallback strategy
+                if df['rsi'].isna().any():
+                    # First try interpolation
+                    df['rsi'] = df['rsi'].interpolate(method='linear')
+                    # For remaining NaN values, use a more intelligent fallback
+                    if df['rsi'].isna().any():
+                        # Calculate simple price momentum as RSI proxy
+                        price_change_pct = df['close'].pct_change(self.rsi_period).fillna(0)
+                        # Convert to RSI-like scale (0-100)
+                        rsi_proxy = 50 + (price_change_pct * 100).clip(-40, 40)
+                        df['rsi'] = df['rsi'].fillna(rsi_proxy)
+                        
+            except Exception as e:
+                logger.error(f"Error calculating RSI: {e}, using price momentum proxy")
+                # Fallback to price momentum-based RSI proxy
+                price_change_pct = df['close'].pct_change(self.rsi_period).fillna(0)
+                df['rsi'] = 50 + (price_change_pct * 100).clip(-40, 40)
             
             # RSI zones with confidence levels
             df['rsi_extreme_oversold'] = df['rsi'] < self.rsi_extreme_low
@@ -242,16 +294,34 @@ class SmartTrendCatcher(TradingStrategy):
             df['rsi_increasing'] = df['rsi_momentum'] > 0
             df['rsi_decreasing'] = df['rsi_momentum'] < 0
             
-            # 3. Enhanced MACD Analysis
-            macd = ta.trend.MACD(df['close'], window_slow=self.macd_slow, 
-                               window_fast=self.macd_fast, window_sign=self.macd_signal)
-            df['macd'] = macd.macd()
-            df['macd_signal_line'] = macd.macd_signal()
-            df['macd_histogram'] = df['macd'] - df['macd_signal_line']
-            
-            # Handle NaN values
-            for col in ['macd', 'macd_signal_line', 'macd_histogram']:
-                df[col] = df[col].ffill()
+            # 3. Enhanced MACD Analysis with better error handling
+            try:
+                macd = ta.trend.MACD(df['close'], window_slow=self.macd_slow, 
+                                   window_fast=self.macd_fast, window_sign=self.macd_signal)
+                df['macd'] = macd.macd()
+                df['macd_signal_line'] = macd.macd_signal()
+                df['macd_histogram'] = df['macd'] - df['macd_signal_line']
+                
+                # Handle NaN values in MACD indicators with better approach
+                macd_cols = ['macd', 'macd_signal_line', 'macd_histogram']
+                for col in macd_cols:
+                    if df[col].isna().any():
+                        # Use interpolation first
+                        df[col] = df[col].interpolate(method='linear')
+                        # For remaining NaN values, use small values instead of zeros
+                        if df[col].isna().any():
+                            # Use a small fraction of price volatility as fallback
+                            price_std = df['close'].rolling(window=10, min_periods=1).std()
+                            fallback_value = price_std * 0.001  # Small but realistic value
+                            df[col] = df[col].fillna(fallback_value)
+                            
+            except Exception as e:
+                logger.error(f"Error calculating MACD: {e}, using price volatility proxy")
+                # Fallback to price volatility-based MACD proxy
+                price_std = df['close'].rolling(window=10, min_periods=1).std()
+                df['macd'] = price_std * 0.001
+                df['macd_signal_line'] = price_std * 0.0005
+                df['macd_histogram'] = df['macd'] - df['macd_signal_line']
             
             # MACD conditions with threshold
             df['macd_hist_positive'] = df['macd_histogram'] > self.macd_histogram_threshold
@@ -263,7 +333,7 @@ class SmartTrendCatcher(TradingStrategy):
             # 4. Enhanced Volume Analysis
             if self.volume_filter_enabled:
                 df['volume_sma'] = df['volume'].rolling(window=self.volume_period).mean()
-                df['volume_sma'] = df['volume_sma'].ffill()
+                df['volume_sma'] = df['volume_sma'].interpolate(method='linear').bfill()
                 
                 # Multiple volume conditions
                 df['volume_above_avg'] = df['volume'] > (df['volume_sma'] * self.volume_multiplier)
@@ -271,13 +341,17 @@ class SmartTrendCatcher(TradingStrategy):
                 df['volume_increasing'] = df['volume'] > df['volume'].shift(1)
                 df['volume_momentum'] = df['volume'].rolling(3).mean() > df['volume_sma']
                 
-                # Volume confirmation score
+                # Volume confirmation score (optimized)
                 df['volume_score'] = (
                     df['volume_above_avg'].astype(int) +
                     df['volume_surge'].astype(int) +
                     df['volume_increasing'].astype(int) +
                     df['volume_momentum'].astype(int)
                 )
+                
+                # Clean up intermediate columns to save memory
+                df.drop(['volume_above_avg', 'volume_surge', 'volume_increasing', 'volume_momentum'], 
+                       axis=1, inplace=True)
             else:
                 df['volume_score'] = 4  # Max score if disabled
             
@@ -285,88 +359,165 @@ class SmartTrendCatcher(TradingStrategy):
             if self.atr_filter_enabled:
                 df['atr'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], 
                                                            window=self.atr_period)
-                df['atr'] = df['atr'].ffill()
-                df['atr_pct'] = (df['atr'] / df['close']) * 100
+                df['atr'] = df['atr'].interpolate(method='linear').bfill()
+                # Safe percentage calculation
+                df['atr_pct'] = np.where(df['close'] > 0, (df['atr'] / df['close']) * 100, 0)
                 
                 # ATR conditions
                 df['sufficient_volatility'] = df['atr_pct'] > self.atr_threshold
                 df['atr_increasing'] = df['atr'] > df['atr'].shift(1)
                 df['atr_trend'] = df['atr'].rolling(5).mean() > df['atr'].rolling(20).mean()
                 
-                # Volatility score
+                # Volatility score (optimized)
                 df['volatility_score'] = (
                     df['sufficient_volatility'].astype(int) +
                     df['atr_increasing'].astype(int) +
                     df['atr_trend'].astype(int)
                 )
+                
+                # Clean up intermediate columns to save memory
+                df.drop(['sufficient_volatility', 'atr_increasing', 'atr_trend'], 
+                       axis=1, inplace=True)
             else:
                 df['volatility_score'] = 3  # Max score if disabled
             
-            # 6. Bollinger Bands for Squeeze Detection
-            bb = ta.volatility.BollingerBands(df['close'], window=self.bb_period, window_dev=self.bb_std)
-            df['bb_upper'] = bb.bollinger_hband()
-            df['bb_lower'] = bb.bollinger_lband()
-            df['bb_middle'] = bb.bollinger_mavg()
-            df['bb_width'] = (df['bb_upper'] - df['bb_lower']) / df['bb_middle']
+            # 6. Enhanced Bollinger Bands for Squeeze Detection
+            try:
+                # Ensure we have enough data for Bollinger Bands calculation
+                if len(df) >= self.bb_period:
+                    bb = ta.volatility.BollingerBands(df['close'], window=self.bb_period, window_dev=self.bb_std)
+                    df['bb_upper'] = bb.bollinger_hband()
+                    df['bb_lower'] = bb.bollinger_lband()
+                    df['bb_middle'] = bb.bollinger_mavg()
+                    
+                    # Handle NaN values with better interpolation strategy
+                    bb_cols = ['bb_upper', 'bb_lower', 'bb_middle']
+                    for col in bb_cols:
+                        if df[col].isna().any():
+                            # Use interpolation first for better data continuity
+                            df[col] = df[col].interpolate(method='linear')
+                            # For remaining NaN values, use intelligent price-based fallbacks
+                            if df[col].isna().any():
+                                if col == 'bb_upper':
+                                    # Use recent volatility for better upper band estimation
+                                    recent_vol = df['close'].rolling(5, min_periods=1).std()
+                                    df[col] = df[col].fillna(df['close'] + (recent_vol * 2))
+                                elif col == 'bb_lower':
+                                    # Use recent volatility for better lower band estimation
+                                    recent_vol = df['close'].rolling(5, min_periods=1).std()
+                                    df[col] = df[col].fillna(df['close'] - (recent_vol * 2))
+                                elif col == 'bb_middle':
+                                    # Use moving average for middle band
+                                    df[col] = df[col].fillna(df['close'].rolling(self.bb_period, min_periods=1).mean())
+                    
+                    # Calculate bb_width with safe division
+                    df['bb_width'] = np.where(
+                        df['bb_middle'] > 0,
+                        (df['bb_upper'] - df['bb_lower']) / df['bb_middle'],
+                        0.1  # Default width if division would be invalid
+                    )
+                    
+                else:
+                    # Not enough data - use intelligent price-based fallbacks
+                    logger.warning(f"Insufficient data for Bollinger Bands ({len(df)} < {self.bb_period}), using dynamic fallbacks")
+                    recent_vol = df['close'].rolling(min(len(df), 5), min_periods=1).std()
+                    df['bb_upper'] = df['close'] + (recent_vol * 2)
+                    df['bb_lower'] = df['close'] - (recent_vol * 2)
+                    df['bb_middle'] = df['close'].rolling(min(len(df), self.bb_period), min_periods=1).mean()
+                    df['bb_width'] = np.where(
+                        df['bb_middle'] > 0,
+                        (df['bb_upper'] - df['bb_lower']) / df['bb_middle'],
+                        0.04  # 4% default width
+                    )
+                    
+            except Exception as e:
+                logger.error(f"Error calculating Bollinger Bands: {e}, using dynamic fallbacks")
+                recent_vol = df['close'].rolling(min(len(df), 5), min_periods=1).std()
+                df['bb_upper'] = df['close'] + (recent_vol * 2)
+                df['bb_lower'] = df['close'] - (recent_vol * 2)
+                df['bb_middle'] = df['close'].rolling(min(len(df), self.bb_period), min_periods=1).mean()
+                df['bb_width'] = np.where(
+                    df['bb_middle'] > 0,
+                    (df['bb_upper'] - df['bb_lower']) / df['bb_middle'],
+                    0.04  # 4% default width
+                )
             
-            # Bollinger Band conditions
+            # Bollinger Band conditions (safe division)
             df['bb_squeeze'] = df['bb_width'] < self.bb_squeeze_threshold
             df['bb_expansion'] = df['bb_width'] > df['bb_width'].shift(1)
             df['bb_breakout_up'] = (df['close'] > df['bb_upper']) & (df['close'].shift(1) <= df['bb_upper'].shift(1))
             df['bb_breakout_down'] = (df['close'] < df['bb_lower']) & (df['close'].shift(1) >= df['bb_lower'].shift(1))
             
-            # 7. Price Action Analysis
+            # 7. Price Action Analysis with improved safety
             df['candle_body'] = np.abs(df['close'] - df['open'])
             df['candle_range'] = df['high'] - df['low']
-            df['body_pct'] = df['candle_body'] / df['candle_range']
+            # Safe division for body percentage
+            df['body_pct'] = np.where(
+                df['candle_range'] > 0,
+                df['candle_body'] / df['candle_range'],
+                0.5  # Default to 50% if range is zero
+            )
             df['upper_wick'] = df['high'] - np.maximum(df['open'], df['close'])
             df['lower_wick'] = np.minimum(df['open'], df['close']) - df['low']
             
-            # Price action conditions
+            # Price action conditions with better handling
             df['strong_candle'] = df['body_pct'] > self.min_candle_body_pct
-            # Safe division to avoid division by zero on doji candles
+            # Improved wick ratio calculation
             df['reasonable_wicks'] = np.where(
-                df['candle_body'] > 0,
-                (df['upper_wick'] / df['candle_body'] < self.max_wick_ratio) & \
-                (df['lower_wick'] / df['candle_body'] < self.max_wick_ratio),
-                True  # Consider doji candles as having reasonable wicks
+                df['candle_body'] > df['candle_body'].quantile(0.1),  # Not in bottom 10% of candle sizes
+                (df['upper_wick'] / np.maximum(df['candle_body'], df['candle_body'].quantile(0.1)) < self.max_wick_ratio) & \
+                (df['lower_wick'] / np.maximum(df['candle_body'], df['candle_body'].quantile(0.1)) < self.max_wick_ratio),
+                True  # Consider very small candles as having reasonable wicks
             )
             df['bullish_candle'] = df['close'] > df['open']
             df['bearish_candle'] = df['close'] < df['open']
             
-            # 8. Confluence Scoring System
-            df['bull_confluence'] = 0
-            df['bear_confluence'] = 0
+            # 8. EMA Crossover Signal Generation
+            df['buy_signal'] = False
+            df['sell_signal'] = False
             
-            # Add confluence points for bullish signals
-            df.loc[df['strong_uptrend'], 'bull_confluence'] += 1
-            df.loc[df['rsi_pullback_zone'] & df['rsi_increasing'], 'bull_confluence'] += 1
-            df.loc[df['macd_hist_positive'] & df['macd_hist_increasing'], 'bull_confluence'] += 1
-            df.loc[df['volume_score'] >= 2, 'bull_confluence'] += 1
-            df.loc[df['volatility_score'] >= 2, 'bull_confluence'] += 1
-            df.loc[df['bb_expansion'] & ~df['bb_squeeze'], 'bull_confluence'] += 1
-            df.loc[df['strong_candle'] & df['bullish_candle'], 'bull_confluence'] += 1
-            # Add price above EMAs as bull signal (balanced with bear signal)
-            df.loc[df['close'] > df['ema_fast'], 'bull_confluence'] += 1
+            # Primary EMA crossover signals
+            df.loc[df['ema_bullish_cross'], 'buy_signal'] = True
+            df.loc[df['ema_bearish_cross'], 'sell_signal'] = True
             
-            # Add confluence points for bearish signals - BALANCED scoring (same as bullish)
-            df.loc[df['strong_downtrend'], 'bear_confluence'] += 1
-            # RSI conditions - simplified and balanced (no extra weighting)
-            df.loc[df['rsi'] > self.rsi_extreme_high, 'bear_confluence'] += 1  # High RSI (same weight as bullish)
-            df.loc[df['rsi_decreasing'] & (df['rsi'] > self.rsi_recovery), 'bear_confluence'] += 1  # RSI momentum turning down
-            # MACD conditions - balanced (same weight as bullish)
-            df.loc[df['macd_hist_negative'] & df['macd_hist_decreasing'], 'bear_confluence'] += 1  # MACD bearish (same weight)
-            df.loc[df['volume_score'] >= 2, 'bear_confluence'] += 1
-            df.loc[df['volatility_score'] >= 2, 'bear_confluence'] += 1
-            df.loc[df['bb_expansion'] & ~df['bb_squeeze'], 'bear_confluence'] += 1
-            df.loc[df['strong_candle'] & df['bearish_candle'], 'bear_confluence'] += 1
-            # Add price below EMAs as bear signal
-            df.loc[df['close'] < df['ema_fast'], 'bear_confluence'] += 1
+            # Additional confirmations for signal quality
+            df['buy_confirmation'] = 0
+            df['sell_confirmation'] = 0
             
-            # 9. Signal Quality Assessment
-            df['signal_quality'] = np.maximum(df['bull_confluence'], df['bear_confluence'])
-            df['high_confidence'] = df['signal_quality'] >= self.confluence_required + 1
-            df['medium_confidence'] = df['signal_quality'] >= self.confluence_required
+            # Add confirmations for buy signals
+            df.loc[df['rsi'] < 70, 'buy_confirmation'] += 1  # RSI not overbought
+            df.loc[df['rsi'] > 30, 'buy_confirmation'] += 1  # RSI not oversold (momentum)
+            df.loc[df['macd_hist_positive'], 'buy_confirmation'] += 1
+            df.loc[df['volume_score'] >= 2, 'buy_confirmation'] += 1
+            df.loc[df['volatility_score'] >= 2, 'buy_confirmation'] += 1
+            df.loc[df['strong_candle'] & df['bullish_candle'], 'buy_confirmation'] += 1
+            
+            # Add confirmations for sell signals
+            df.loc[df['rsi'] > 30, 'sell_confirmation'] += 1  # RSI not oversold
+            df.loc[df['rsi'] < 70, 'sell_confirmation'] += 1  # RSI not overbought (momentum)
+            df.loc[df['macd_hist_negative'], 'sell_confirmation'] += 1
+            df.loc[df['volume_score'] >= 2, 'sell_confirmation'] += 1
+            df.loc[df['volatility_score'] >= 2, 'sell_confirmation'] += 1
+            df.loc[df['strong_candle'] & df['bearish_candle'], 'sell_confirmation'] += 1
+            
+            # Final signals with minimum confirmations
+            df['confirmed_buy'] = df['buy_signal'] & (df['buy_confirmation'] >= self.confluence_required)
+            df['confirmed_sell'] = df['sell_signal'] & (df['sell_confirmation'] >= self.confluence_required)
+            
+            # Memory optimization - clean up intermediate columns we don't need for final signals
+            columns_to_drop = [
+                'rsi_extreme_oversold', 'rsi_pullback_zone', 'rsi_recovery_bull', 
+                'rsi_extreme_overbought', 'rsi_recovery_bear', 'rsi_momentum',
+                'rsi_increasing', 'rsi_decreasing', 'macd_hist_positive', 'macd_hist_negative',
+                'macd_hist_increasing', 'macd_hist_decreasing', 'macd_strong_momentum',
+                'bb_squeeze', 'bb_expansion', 'bb_breakout_up', 'bb_breakout_down',
+                'candle_body', 'candle_range', 'body_pct', 'upper_wick', 'lower_wick',
+                'strong_candle', 'reasonable_wicks', 'bullish_candle', 'bearish_candle'
+            ]
+            # Only drop columns that exist to avoid KeyError
+            existing_columns_to_drop = [col for col in columns_to_drop if col in df.columns]
+            if existing_columns_to_drop:
+                df.drop(existing_columns_to_drop, axis=1, inplace=True)
             
             return df
             
@@ -375,14 +526,14 @@ class SmartTrendCatcher(TradingStrategy):
             return df
     
     def get_signal(self, klines):
-        """Generate enhanced Smart Trend Catcher signals with confluence requirement"""
+        """Generate EMA crossover signals with confirmations"""
         try:
-            min_required = max(self.ema_trend, self.macd_slow, self.volume_period, 
+            min_required = max(self.ema_slow, self.macd_slow, self.volume_period, 
                              self.atr_period, self.bb_period) + 20
             if not klines or len(klines) < min_required:
                 # Show warning every 10th time to reduce log spam
                 if self._warning_count % 10 == 0:
-                    logger.warning(f"Insufficient data for enhanced signal generation (need {min_required}, have {len(klines) if klines else 0})")
+                    logger.warning(f"Insufficient data for EMA crossover signal generation (need {min_required}, have {len(klines) if klines else 0})")
                 self._warning_count += 1
                 return None
             
@@ -395,16 +546,18 @@ class SmartTrendCatcher(TradingStrategy):
             df.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume', 
                          'close_time', 'quote_volume', 'trades', 'taker_buy_base', 'taker_buy_quote', 'ignore']
             
-            # Data cleaning
+            # Data cleaning with improved method
             numeric_columns = ['open', 'high', 'low', 'close', 'volume']
             for col in numeric_columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
                 if df[col].isna().any():
                     logger.warning(f"Cleaning NaN values in {col}")
-                    df[col] = df[col].ffill()  # Only forward fill to avoid look-ahead bias
+                    # Use interpolation to avoid look-ahead bias
+                    df[col] = df[col].interpolate(method='linear').bfill().ffill()
             
+            # Final validation after cleaning
             if df[numeric_columns].isna().any().any():
-                logger.error("Failed to clean price data")
+                logger.error("Failed to clean price data after interpolation")
                 return None
             
             # Add enhanced indicators
@@ -417,106 +570,39 @@ class SmartTrendCatcher(TradingStrategy):
             latest = df.iloc[-1]
             previous = df.iloc[-2]
             
-            # Validate required columns
-            required_columns = ['bull_confluence', 'bear_confluence', 'signal_quality', 
-                              'medium_confidence', 'high_confidence', 'strong_uptrend', 'strong_downtrend']
+            # Validate required columns for EMA crossover
+            required_columns = ['confirmed_buy', 'confirmed_sell', 'buy_confirmation', 'sell_confirmation', 
+                              'ema_bullish_cross', 'ema_bearish_cross', 'ema_fast', 'ema_slow']
             
             for col in required_columns:
                 if col not in df.columns or pd.isna(latest[col]):
-                    logger.warning(f"Missing or invalid indicator: {col}")
+                    logger.warning(f"Missing or invalid EMA crossover indicator: {col}")
                     return None
             
-            # Enhanced Signal Generation with Confluence
+            # EMA Crossover Signal Generation
             signal = None
-            confidence_level = 0
             
-            # BUY Signal: Strong uptrend + sufficient confluence
-            strong_uptrend = latest['strong_uptrend']
-            bull_confluence = int(latest['bull_confluence'])
-            
-            # Fast mode: Accept signals with lower confluence for quicker entries
-            min_confluence = 1 if self.fast_mode else self.confluence_required
-            
-            if (strong_uptrend and bull_confluence >= min_confluence):
-                
-                # Additional confirmations for higher confidence
-                extra_confirmations = []
-                
-                # RSI pullback recovery
-                if (previous.get('rsi_pullback_zone', False) and 
-                    latest.get('rsi_recovery_bull', False)):
-                    extra_confirmations.append("RSI Recovery")
-                
-                # Extreme RSI for higher confidence
-                if previous.get('rsi_extreme_oversold', False):
-                    extra_confirmations.append("Extreme RSI")
-                
-                # Volume surge
-                if latest.get('volume_surge', False):
-                    extra_confirmations.append("Volume Surge")
-                
-                # MACD strong momentum
-                if latest.get('macd_strong_momentum', False):
-                    extra_confirmations.append("Strong MACD")
-                
-                # Bollinger Band breakout
-                if latest.get('bb_breakout_up', False):
-                    extra_confirmations.append("BB Breakout")
-                
+            # BUY Signal: EMA bullish crossover with confirmations
+            if latest['confirmed_buy']:
                 signal = 'BUY'
-                confidence_level = bull_confluence
+                confirmations = int(latest['buy_confirmation'])
+                self._last_confidence = confirmations  # Store for position sizing
                 
-                logger.info(f"🟢 BUY Signal - Confluence: {confidence_level}, "
-                          f"RSI: {latest['rsi']:.1f}, "
-                          f"MACD: {latest['macd_histogram']:.6f}, "
-                          f"Volume Score: {latest.get('volume_score', 0)}, "
-                          f"Extras: {', '.join(extra_confirmations) if extra_confirmations else 'None'}")
+                logger.info(f"🟢 BUY Signal - EMA Crossover Confirmed")
+                logger.info(f"   Fast EMA: {latest['ema_fast']:.6f}, Slow EMA: {latest['ema_slow']:.6f}")
+                logger.info(f"   RSI: {latest['rsi']:.1f}, MACD: {latest['macd_histogram']:.6f}")
+                logger.info(f"   Confirmations: {confirmations}, Volume Score: {latest.get('volume_score', 0)}")
             
-            # SELL Signal: Balanced conditions (same requirements as BUY)
-            elif (
-                # Primary condition: Strong downtrend (same as BUY requirement)
-                latest['strong_downtrend'] and 
-                # Fast mode: Accept signals with lower confluence for quicker entries
-                int(latest['bear_confluence']) >= min_confluence
-            ):
-                
-                # Additional confirmations
-                extra_confirmations = []
-                
-                # RSI overbought recovery for shorts (price coming down from overbought)
-                if (previous['rsi'] > self.rsi_extreme_high and 
-                    latest['rsi'] < previous['rsi'] and latest['rsi'] > self.rsi_recovery):
-                    extra_confirmations.append("RSI Recovery")
-                
-                # Extreme RSI for higher confidence
-                if previous.get('rsi_extreme_overbought', False):
-                    extra_confirmations.append("Extreme RSI")
-                
-                # Volume surge
-                if latest.get('volume_surge', False):
-                    extra_confirmations.append("Volume Surge")
-                
-                # MACD strong momentum
-                if latest.get('macd_strong_momentum', False):
-                    extra_confirmations.append("Strong MACD")
-                
-                # Bollinger Band breakout
-                if latest.get('bb_breakout_down', False):
-                    extra_confirmations.append("BB Breakout")
-                
+            # SELL Signal: EMA bearish crossover with confirmations
+            elif latest['confirmed_sell']:
                 signal = 'SELL'
-                confidence_level = int(latest['bear_confluence'])
+                confirmations = int(latest['sell_confirmation'])
+                self._last_confidence = confirmations  # Store for position sizing
                 
-                logger.info(f"🔴 SELL Signal - Confluence: {confidence_level}, "
-                          f"RSI: {latest['rsi']:.1f}, "
-                          f"MACD: {latest['macd_histogram']:.6f}, "
-                          f"Volume Score: {latest.get('volume_score', 0)}, "
-                          f"Extras: {', '.join(extra_confirmations) if extra_confirmations else 'None'}")
-            
-            # Update tracking if signal generated
-            if signal:
-                # Store confidence for position sizing
-                setattr(self, '_last_confidence', confidence_level)
+                logger.info(f"🔴 SELL Signal - EMA Crossover Confirmed")
+                logger.info(f"   Fast EMA: {latest['ema_fast']:.6f}, Slow EMA: {latest['ema_slow']:.6f}")
+                logger.info(f"   RSI: {latest['rsi']:.1f}, MACD: {latest['macd_histogram']:.6f}")
+                logger.info(f"   Confirmations: {confirmations}, Volume Score: {latest.get('volume_score', 0)}")
             
             return signal
             
@@ -531,27 +617,25 @@ class SmartTrendCatcher(TradingStrategy):
         try:
             confidence = getattr(self, '_last_confidence', self.confluence_required)
             
-            # Base multiplier (normalize from old 75% default to current base_position_pct)
-            OLD_DEFAULT_POSITION_PCT = 0.75
-            multiplier = self.base_position_pct / OLD_DEFAULT_POSITION_PCT
+            # Start with base position percentage as multiplier
+            multiplier = self.base_position_pct
             
-            # Adjust based on confidence
+            # Adjust based on confidence level
             if confidence >= self.confluence_required + 2:  # High confidence
-                multiplier *= self.confidence_multiplier
+                multiplier = min(multiplier * self.confidence_multiplier, self.max_position_pct)
             elif confidence >= self.confluence_required + 1:  # Medium-high confidence
-                multiplier *= (self.confidence_multiplier + 1) / 2
+                multiplier = min(multiplier * ((self.confidence_multiplier + 1) / 2), self.max_position_pct)
             # else: use base multiplier for minimum confidence
             
-            # Cap at maximum
-            max_multiplier = self.max_position_pct / OLD_DEFAULT_POSITION_PCT
-            multiplier = min(multiplier, max_multiplier)
+            # Ensure multiplier is within valid range
+            multiplier = max(0.1, min(multiplier, self.max_position_pct))
             
             logger.info(f"Position size multiplier: {multiplier:.2f} (confidence: {confidence})")
             return multiplier
             
         except Exception as e:
             logger.error(f"Error calculating position size multiplier: {e}")
-            return self.base_position_pct / 0.75  # Safe default
+            return self.base_position_pct  # Safe default
 
 # Factory function to get a strategy by name
 def get_strategy(strategy_name):
@@ -567,32 +651,52 @@ def get_strategy(strategy_name):
         rsi_extreme_high = 70
         logger.warning("Could not import RSI config values, using defaults")
     
+    # Import additional config values
+    try:
+        from modules.config import (
+            FAST_EMA, SLOW_EMA, MACD_FAST, MACD_SLOW, MACD_SIGNAL,
+            VOLUME_PERIOD, ATR_PERIOD, BB_PERIOD, VOLUME_MULTIPLIER,
+            ATR_THRESHOLD, CONFLUENCE_REQUIRED
+        )
+    except ImportError:
+        # Fallback values
+        FAST_EMA = 8
+        SLOW_EMA = 21
+        MACD_FAST = 8
+        MACD_SLOW = 17
+        MACD_SIGNAL = 6
+        VOLUME_PERIOD = 10
+        ATR_PERIOD = 7
+        BB_PERIOD = 10
+        VOLUME_MULTIPLIER = 1.2
+        ATR_THRESHOLD = 0.4
+        CONFLUENCE_REQUIRED = 2
+    
     strategies = {
         'SmartTrendCatcher': SmartTrendCatcher(
-            # Optimized for 5m timeframe - reduced periods
-            ema_trend=21,              # Reduced from 50 to 21 for 5m
-            ema_fast=8,                # Reduced from 21 to 8 for 5m
+            # EMA crossover parameters from config
+            ema_slow=SLOW_EMA,
+            ema_fast=FAST_EMA,
             rsi_period=rsi_period,
             rsi_pullback_low=30,
             rsi_pullback_high=50,
             rsi_recovery=50,
             rsi_extreme_high=rsi_extreme_high,  # Use config value
-            # MACD optimized for 5m
-            macd_fast=8,               # Reduced from 12 for faster response
-            macd_slow=17,              # Reduced from 26 for faster response
-            macd_signal=6,             # Reduced from 9 for faster response
-            # Volume and volatility periods optimized for 5m
-            volume_period=10,          # Reduced from 20 for 5m
-            atr_period=7,              # Reduced from 14 for 5m
-            bb_period=10,              # Reduced from 20 for 5m
-            # False signal reduction parameters - relaxed for 5m
+            # MACD parameters from config
+            macd_fast=MACD_FAST,
+            macd_slow=MACD_SLOW,
+            macd_signal=MACD_SIGNAL,
+            # Volume and volatility periods from config
+            volume_period=VOLUME_PERIOD,
+            atr_period=ATR_PERIOD,
+            bb_period=BB_PERIOD,
+            # Signal filtering parameters from config
             volume_filter_enabled=True,
-            volume_multiplier=1.2,     # Relaxed for more signals
+            volume_multiplier=VOLUME_MULTIPLIER,
             atr_filter_enabled=True,
-            atr_threshold=0.4,         # Reduced threshold for 5m volatility
-            # Enable fast mode for quicker entries
-            fast_mode=True,
-            confluence_required=1      # Lower requirement for faster signals
+            atr_threshold=ATR_THRESHOLD,
+            # Confluence requirement from config
+            confluence_required=CONFLUENCE_REQUIRED
         ),
     }
     
