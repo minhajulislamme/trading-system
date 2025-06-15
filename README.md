@@ -37,8 +37,7 @@
 ### 🔧 **Technical Indicators**
 
 - **Trend Analysis**: Exponential Moving Averages (EMA)
-- **Momentum**: RSI with multiple zones and momentum tracking
-- **Volatility**: MACD histogram with threshold validation
+- **Momentum**: MACD histogram with threshold validation
 - **Volume Confirmation**: Multi-factor volume analysis
 - **Risk Management**: ATR-based volatility filtering
 - **Price Action**: Bollinger Bands and candlestick patterns
@@ -69,25 +68,21 @@ The **SmartTrendCatcher** strategy employs a sophisticated confluence-based appr
 Requires **ALL** of the following:
 
 1. **Strong Uptrend**: Price > 50 EMA AND 21 EMA > 50 EMA
-2. **Confluence Score ≥ 2**: From 8 possible confirmation points:
+2. **Confluence Score ≥ 2**: From 6 possible confirmation points:
    - ✅ Trend alignment
-   - ✅ RSI pullback recovery (30-50 zone)
    - ✅ MACD positive momentum
    - ✅ Volume above 1.5x average
    - ✅ Sufficient volatility (ATR > 0.8%)
    - ✅ Bollinger Band expansion
    - ✅ Strong bullish candlesticks
-   - ✅ Price above fast EMA
 
 ### 📉 **Sell Signal Generation**
 
 Requires **ALL** of the following:
 
 1. **Strong Downtrend**: Price < 50 EMA AND 21 EMA < 50 EMA
-2. **Confluence Score ≥ 2**: From 8 possible confirmation points:
+2. **Confluence Score ≥ 2**: From 6 possible confirmation points:
    - ✅ Trend breakdown
-   - ✅ RSI overbought (>70)
-   - ✅ RSI momentum decline
    - ✅ MACD negative momentum
    - ✅ Volume confirmation
    - ✅ Volatility support

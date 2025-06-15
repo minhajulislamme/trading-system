@@ -47,7 +47,7 @@ class SmartTrendCatcher(TradingStrategy):
     - EMA crossover as primary signal generation
     - Fast EMA crosses above/below slow EMA for entries
     - Enhanced volume and volatility filtering
-    - RSI and MACD confirmation for better signal quality
+    - MACD confirmation for better signal quality
     
     Signal Generation:
     - BUY: Fast EMA crosses above slow EMA with confirmations
@@ -59,14 +59,6 @@ class SmartTrendCatcher(TradingStrategy):
                  # EMA crossover parameters
                  ema_slow=50,               # Slow EMA for crossover
                  ema_fast=21,               # Fast EMA for crossover
-                 
-                 # RSI parameters with tighter controls
-                 rsi_period=14,
-                 rsi_pullback_low=30,       # Lower pullback zone for more signals
-                 rsi_pullback_high=50,      # Standard pullback zone
-                 rsi_recovery=50,           # Standard recovery threshold
-                 rsi_extreme_low=25,        # Extreme oversold for higher confidence
-                 rsi_extreme_high=70,       # Lower overbought for more SELL signals
                  
                  # MACD parameters with confirmation
                  macd_fast=12,
@@ -109,10 +101,6 @@ class SmartTrendCatcher(TradingStrategy):
             raise ValueError("EMA periods must be positive")
         if ema_fast >= ema_slow:
             raise ValueError("Fast EMA must be less than slow EMA")
-        if rsi_period <= 0:
-            raise ValueError("RSI period must be positive")
-        if not (0 <= rsi_extreme_low <= rsi_pullback_low <= rsi_pullback_high <= rsi_recovery <= rsi_extreme_high <= 100):
-            raise ValueError("Invalid RSI levels hierarchy")
         if macd_fast <= 0 or macd_slow <= 0 or macd_signal <= 0 or macd_fast >= macd_slow:
             raise ValueError("Invalid MACD parameters")
         if not (0 < base_position_pct <= max_position_pct <= 1.0):
@@ -123,13 +111,6 @@ class SmartTrendCatcher(TradingStrategy):
         # Store enhanced parameters
         self.ema_slow = ema_slow
         self.ema_fast = ema_fast
-        
-        self.rsi_period = rsi_period
-        self.rsi_pullback_low = rsi_pullback_low
-        self.rsi_pullback_high = rsi_pullback_high
-        self.rsi_recovery = rsi_recovery
-        self.rsi_extreme_low = rsi_extreme_low
-        self.rsi_extreme_high = rsi_extreme_high
         
         self.macd_fast = macd_fast
         self.macd_slow = macd_slow
@@ -170,7 +151,6 @@ class SmartTrendCatcher(TradingStrategy):
         
         logger.info(f"Enhanced {self.name} initialized with:")
         logger.info(f"  EMA Crossover: {ema_fast}/{ema_slow}")
-        logger.info(f"  RSI levels: {rsi_extreme_low}/{rsi_pullback_low}-{rsi_pullback_high}/{rsi_recovery}/{rsi_extreme_high}")
         logger.info(f"  Confluence required: {confluence_required}")
         logger.info(f"  Position sizing: {base_position_pct:.1%}-{max_position_pct:.1%}")
     
@@ -261,40 +241,7 @@ class SmartTrendCatcher(TradingStrategy):
             )
             df['strong_crossover'] = df['ema_spread'] > 0.002  # At least 0.2% spread
             
-            # 2. Enhanced RSI Analysis with better error handling
-            try:
-                df['rsi'] = ta.momentum.rsi(df['close'], window=self.rsi_period)
-                # Handle NaN values in RSI with better fallback strategy
-                if df['rsi'].isna().any():
-                    # First try interpolation
-                    df['rsi'] = df['rsi'].interpolate(method='linear')
-                    # For remaining NaN values, use a more intelligent fallback
-                    if df['rsi'].isna().any():
-                        # Calculate simple price momentum as RSI proxy
-                        price_change_pct = df['close'].pct_change(self.rsi_period).fillna(0)
-                        # Convert to RSI-like scale (0-100)
-                        rsi_proxy = 50 + (price_change_pct * 100).clip(-40, 40)
-                        df['rsi'] = df['rsi'].fillna(rsi_proxy)
-                        
-            except Exception as e:
-                logger.error(f"Error calculating RSI: {e}, using price momentum proxy")
-                # Fallback to price momentum-based RSI proxy
-                price_change_pct = df['close'].pct_change(self.rsi_period).fillna(0)
-                df['rsi'] = 50 + (price_change_pct * 100).clip(-40, 40)
-            
-            # RSI zones with confidence levels
-            df['rsi_extreme_oversold'] = df['rsi'] < self.rsi_extreme_low
-            df['rsi_pullback_zone'] = (df['rsi'] >= self.rsi_pullback_low) & (df['rsi'] <= self.rsi_pullback_high)
-            df['rsi_recovery_bull'] = df['rsi'] > self.rsi_recovery
-            df['rsi_extreme_overbought'] = df['rsi'] > self.rsi_extreme_high
-            df['rsi_recovery_bear'] = df['rsi'] < (100 - self.rsi_recovery)
-            
-            # RSI momentum and divergence
-            df['rsi_momentum'] = df['rsi'].diff()
-            df['rsi_increasing'] = df['rsi_momentum'] > 0
-            df['rsi_decreasing'] = df['rsi_momentum'] < 0
-            
-            # 3. Enhanced MACD Analysis with better error handling
+            # 2. Enhanced MACD Analysis with better error handling
             try:
                 macd = ta.trend.MACD(df['close'], window_slow=self.macd_slow, 
                                    window_fast=self.macd_fast, window_sign=self.macd_signal)
@@ -485,16 +432,12 @@ class SmartTrendCatcher(TradingStrategy):
             df['sell_confirmation'] = 0
             
             # Add confirmations for buy signals
-            df.loc[df['rsi'] < 70, 'buy_confirmation'] += 1  # RSI not overbought
-            df.loc[df['rsi'] > 30, 'buy_confirmation'] += 1  # RSI not oversold (momentum)
             df.loc[df['macd_hist_positive'], 'buy_confirmation'] += 1
             df.loc[df['volume_score'] >= 2, 'buy_confirmation'] += 1
             df.loc[df['volatility_score'] >= 2, 'buy_confirmation'] += 1
             df.loc[df['strong_candle'] & df['bullish_candle'], 'buy_confirmation'] += 1
             
             # Add confirmations for sell signals
-            df.loc[df['rsi'] > 30, 'sell_confirmation'] += 1  # RSI not oversold
-            df.loc[df['rsi'] < 70, 'sell_confirmation'] += 1  # RSI not overbought (momentum)
             df.loc[df['macd_hist_negative'], 'sell_confirmation'] += 1
             df.loc[df['volume_score'] >= 2, 'sell_confirmation'] += 1
             df.loc[df['volatility_score'] >= 2, 'sell_confirmation'] += 1
@@ -506,9 +449,7 @@ class SmartTrendCatcher(TradingStrategy):
             
             # Memory optimization - clean up intermediate columns we don't need for final signals
             columns_to_drop = [
-                'rsi_extreme_oversold', 'rsi_pullback_zone', 'rsi_recovery_bull', 
-                'rsi_extreme_overbought', 'rsi_recovery_bear', 'rsi_momentum',
-                'rsi_increasing', 'rsi_decreasing', 'macd_hist_positive', 'macd_hist_negative',
+                'macd_hist_positive', 'macd_hist_negative',
                 'macd_hist_increasing', 'macd_hist_decreasing', 'macd_strong_momentum',
                 'bb_squeeze', 'bb_expansion', 'bb_breakout_up', 'bb_breakout_down',
                 'candle_body', 'candle_range', 'body_pct', 'upper_wick', 'lower_wick',
@@ -590,7 +531,7 @@ class SmartTrendCatcher(TradingStrategy):
                 
                 logger.info(f"🟢 BUY Signal - EMA Crossover Confirmed")
                 logger.info(f"   Fast EMA: {latest['ema_fast']:.6f}, Slow EMA: {latest['ema_slow']:.6f}")
-                logger.info(f"   RSI: {latest['rsi']:.1f}, MACD: {latest['macd_histogram']:.6f}")
+                logger.info(f"   MACD: {latest['macd_histogram']:.6f}")
                 logger.info(f"   Confirmations: {confirmations}, Volume Score: {latest.get('volume_score', 0)}")
             
             # SELL Signal: EMA bearish crossover with confirmations
@@ -601,7 +542,7 @@ class SmartTrendCatcher(TradingStrategy):
                 
                 logger.info(f"🔴 SELL Signal - EMA Crossover Confirmed")
                 logger.info(f"   Fast EMA: {latest['ema_fast']:.6f}, Slow EMA: {latest['ema_slow']:.6f}")
-                logger.info(f"   RSI: {latest['rsi']:.1f}, MACD: {latest['macd_histogram']:.6f}")
+                logger.info(f"   MACD: {latest['macd_histogram']:.6f}")
                 logger.info(f"   Confirmations: {confirmations}, Volume Score: {latest.get('volume_score', 0)}")
             
             return signal
@@ -640,17 +581,6 @@ class SmartTrendCatcher(TradingStrategy):
 # Factory function to get a strategy by name
 def get_strategy(strategy_name):
     """Factory function to get a strategy by name"""
-    try:
-        from modules.config import RSI_PERIOD, RSI_OVERBOUGHT, RSI_OVERSOLD
-        # Use config values for consistency
-        rsi_extreme_high = RSI_OVERBOUGHT if RSI_OVERBOUGHT else 70
-        rsi_period = RSI_PERIOD if RSI_PERIOD else 14
-    except ImportError:
-        # Default values if config import fails
-        rsi_period = 14
-        rsi_extreme_high = 70
-        logger.warning("Could not import RSI config values, using defaults")
-    
     # Import additional config values
     try:
         from modules.config import (
@@ -677,11 +607,6 @@ def get_strategy(strategy_name):
             # EMA crossover parameters from config
             ema_slow=SLOW_EMA,
             ema_fast=FAST_EMA,
-            rsi_period=rsi_period,
-            rsi_pullback_low=30,
-            rsi_pullback_high=50,
-            rsi_recovery=50,
-            rsi_extreme_high=rsi_extreme_high,  # Use config value
             # MACD parameters from config
             macd_fast=MACD_FAST,
             macd_slow=MACD_SLOW,

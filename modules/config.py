@@ -50,15 +50,7 @@ AUTO_COMPOUND = os.getenv('AUTO_COMPOUND', 'True').lower() == 'true'
 COMPOUND_REINVEST_PERCENT = float(os.getenv('COMPOUND_REINVEST_PERCENT', '0.75'))
 COMPOUND_INTERVAL = os.getenv('COMPOUND_INTERVAL', 'DAILY')
 
-# Technical indicator parameters - SmartTrendCatcher Strategy
-RSI_PERIOD = int(os.getenv('RSI_PERIOD', '14'))
-RSI_OVERBOUGHT = int(os.getenv('RSI_OVERBOUGHT', '70'))
-RSI_OVERSOLD = int(os.getenv('RSI_OVERSOLD', '30'))
-RSI_PULLBACK_LOW = int(os.getenv('RSI_PULLBACK_LOW', '30'))
-RSI_PULLBACK_HIGH = int(os.getenv('RSI_PULLBACK_HIGH', '50'))
-RSI_RECOVERY = int(os.getenv('RSI_RECOVERY', '50'))
-RSI_EXTREME_LOW = int(os.getenv('RSI_EXTREME_LOW', '25'))
-RSI_EXTREME_HIGH = int(os.getenv('RSI_EXTREME_HIGH', '70'))
+# Technical indicator parameters - SmartTrendCatcher Strategy (RSI removed)
 
 # EMA parameters
 EMA_TREND = int(os.getenv('EMA_TREND', '50'))
@@ -74,18 +66,18 @@ MACD_HISTOGRAM_THRESHOLD = float(os.getenv('MACD_HISTOGRAM_THRESHOLD', '0.0001')
 
 # Volume filter parameters
 VOLUME_FILTER_ENABLED = os.getenv('VOLUME_FILTER_ENABLED', 'True').lower() == 'true'
-VOLUME_PERIOD = int(os.getenv('VOLUME_PERIOD', '20'))
+VOLUME_PERIOD = int(os.getenv('VOLUME_PERIOD', '20'))  # Optimized for 15m
 VOLUME_MULTIPLIER = float(os.getenv('VOLUME_MULTIPLIER', '1.2'))
 VOLUME_SURGE_MULTIPLIER = float(os.getenv('VOLUME_SURGE_MULTIPLIER', '2.0'))
 
 # ATR (Average True Range) parameters
 ATR_FILTER_ENABLED = os.getenv('ATR_FILTER_ENABLED', 'True').lower() == 'true'
-ATR_PERIOD = int(os.getenv('ATR_PERIOD', '14'))
-ATR_THRESHOLD = float(os.getenv('ATR_THRESHOLD', '0.5'))
+ATR_PERIOD = int(os.getenv('ATR_PERIOD', '14'))  # Optimized for 15m
+ATR_THRESHOLD = float(os.getenv('ATR_THRESHOLD', '0.6'))  # Adjusted for 15m
 ATR_TREND_FACTOR = float(os.getenv('ATR_TREND_FACTOR', '1.2'))
 
 # Bollinger Bands parameters
-BB_PERIOD = int(os.getenv('BB_PERIOD', '20'))
+BB_PERIOD = int(os.getenv('BB_PERIOD', '20'))  # Optimized for 15m
 BB_STD = float(os.getenv('BB_STD', '2.0'))
 BB_SQUEEZE_THRESHOLD = float(os.getenv('BB_SQUEEZE_THRESHOLD', '0.1'))
 
@@ -99,7 +91,7 @@ BASE_POSITION_PCT = float(os.getenv('BASE_POSITION_PCT', '0.3'))  # 30% base pos
 MAX_POSITION_PCT = float(os.getenv('MAX_POSITION_PCT', '0.5'))    # 50% max position
 CONFIDENCE_MULTIPLIER = float(os.getenv('CONFIDENCE_MULTIPLIER', '1.5'))
 
-TIMEFRAME = os.getenv('TIMEFRAME', '5m')
+TIMEFRAME = os.getenv('TIMEFRAME', '15m')
 
 # Risk management - Enhanced stop loss settings
 USE_STOP_LOSS = os.getenv('USE_STOP_LOSS', 'True').lower() == 'true'
