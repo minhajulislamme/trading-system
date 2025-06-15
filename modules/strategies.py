@@ -569,22 +569,30 @@ def get_strategy(strategy_name):
     
     strategies = {
         'SmartTrendCatcher': SmartTrendCatcher(
-            ema_trend=50,
+            # Optimized for 5m timeframe - reduced periods
+            ema_trend=21,              # Reduced from 50 to 21 for 5m
+            ema_fast=8,                # Reduced from 21 to 8 for 5m
             rsi_period=rsi_period,
             rsi_pullback_low=30,
             rsi_pullback_high=50,
             rsi_recovery=50,
             rsi_extreme_high=rsi_extreme_high,  # Use config value
-            # False signal reduction parameters - Match class defaults
+            # MACD optimized for 5m
+            macd_fast=8,               # Reduced from 12 for faster response
+            macd_slow=17,              # Reduced from 26 for faster response
+            macd_signal=6,             # Reduced from 9 for faster response
+            # Volume and volatility periods optimized for 5m
+            volume_period=10,          # Reduced from 20 for 5m
+            atr_period=7,              # Reduced from 14 for 5m
+            bb_period=10,              # Reduced from 20 for 5m
+            # False signal reduction parameters - relaxed for 5m
             volume_filter_enabled=True,
-            volume_period=20,
-            volume_multiplier=1.5,  # Match class default instead of 1.2
+            volume_multiplier=1.2,     # Relaxed for more signals
             atr_filter_enabled=True,
-            atr_period=14,
-            atr_threshold=0.8,  # Match class default instead of 0.5
+            atr_threshold=0.4,         # Reduced threshold for 5m volatility
             # Enable fast mode for quicker entries
             fast_mode=True,
-            confluence_required=1  # Lower requirement for faster signals
+            confluence_required=1      # Lower requirement for faster signals
         ),
     }
     
