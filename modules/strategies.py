@@ -102,9 +102,15 @@ class SmartTrendCatcher(TradingStrategy):
                  # Dynamic position sizing
                  base_position_pct=0.3,     # Base position size (30% instead of 75%)
                  max_position_pct=0.5,      # Maximum position size
-                 confidence_multiplier=1.5): # Multiply position size by confidence
+                 confidence_multiplier=1.5, # Multiply position size by confidence
+                 
+                 # FAST MODE - New parameter for quicker entries
+                 fast_mode=False):           # Enable for faster signal generation
         
         super().__init__("SmartTrendCatcher")
+        
+        # Store fast mode setting
+        self.fast_mode = fast_mode
         
         # Enhanced parameter validation
         if ema_trend <= 0 or ema_fast <= 0:
@@ -121,6 +127,11 @@ class SmartTrendCatcher(TradingStrategy):
             raise ValueError("Invalid position sizing parameters")
         if confluence_required < 1:
             raise ValueError("Confluence required must be at least 1")
+        
+        # Adjust confluence requirements in fast mode
+        if self.fast_mode:
+            confluence_required = max(1, confluence_required - 1)  # Reduce by 1 but keep minimum of 1
+            logger.info(f"FAST MODE: Reduced confluence requirement to {confluence_required} for quicker entries")
         
         # Store enhanced parameters
         self.ema_trend = ema_trend
@@ -170,11 +181,15 @@ class SmartTrendCatcher(TradingStrategy):
         self._last_confidence = confluence_required
         self._warning_count = 0
         
+        # Fast mode flag
+        self.fast_mode = fast_mode
+        
         logger.info(f"Enhanced {self.name} initialized with:")
         logger.info(f"  Trend EMAs: {ema_fast}/{ema_trend}")
         logger.info(f"  RSI levels: {rsi_extreme_low}/{rsi_pullback_low}-{rsi_pullback_high}/{rsi_recovery}/{rsi_extreme_high}")
         logger.info(f"  Confluence required: {confluence_required}")
         logger.info(f"  Position sizing: {base_position_pct:.1%}-{max_position_pct:.1%}")
+        logger.info(f"  Fast mode: {'Enabled' if fast_mode else 'Disabled'}")
     
     def add_indicators(self, df):
         """Add enhanced indicators with multi-layer filtering"""
@@ -419,7 +434,10 @@ class SmartTrendCatcher(TradingStrategy):
             strong_uptrend = latest['strong_uptrend']
             bull_confluence = int(latest['bull_confluence'])
             
-            if (strong_uptrend and bull_confluence >= self.confluence_required):
+            # Fast mode: Accept signals with lower confluence for quicker entries
+            min_confluence = 1 if self.fast_mode else self.confluence_required
+            
+            if (strong_uptrend and bull_confluence >= min_confluence):
                 
                 # Additional confirmations for higher confidence
                 extra_confirmations = []
@@ -458,8 +476,8 @@ class SmartTrendCatcher(TradingStrategy):
             elif (
                 # Primary condition: Strong downtrend (same as BUY requirement)
                 latest['strong_downtrend'] and 
-                # Confluence requirement (SAME as BUY - no reduction)
-                int(latest['bear_confluence']) >= self.confluence_required
+                # Fast mode: Accept signals with lower confluence for quicker entries
+                int(latest['bear_confluence']) >= min_confluence
             ):
                 
                 # Additional confirmations
@@ -563,7 +581,10 @@ def get_strategy(strategy_name):
             volume_multiplier=1.5,  # Match class default instead of 1.2
             atr_filter_enabled=True,
             atr_period=14,
-            atr_threshold=0.8  # Match class default instead of 0.5
+            atr_threshold=0.8,  # Match class default instead of 0.5
+            # Enable fast mode for quicker entries
+            fast_mode=True,
+            confluence_required=1  # Lower requirement for faster signals
         ),
     }
     

@@ -24,6 +24,7 @@ from modules.config import (
     USE_TELEGRAM, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
     SEND_DAILY_REPORT, DAILY_REPORT_TIME, AUTO_COMPOUND,
     MULTI_INSTANCE_MODE, MAX_POSITIONS_PER_SYMBOL,
+    FAST_TRADING_MODE, FAST_CHECK_INTERVAL, ENABLE_QUICK_SIGNALS,
     # Add these to your config.py:
     # BACKTEST_BEFORE_LIVE = True
     # BACKTEST_MIN_PROFIT_PCT = 5.0
@@ -701,12 +702,21 @@ def check_for_signals(symbol=None):
         logger.warning(f"Ignoring signal check for {symbol} - this instance is dedicated to {TRADING_SYMBOL}")
         return
     
-    if not new_candle_received.get(symbol, False):
+    # FAST MODE: Process signals more aggressively, don't wait only for new candles
+    # Check every time for faster response to market changes
+    should_process = (
+        new_candle_received.get(symbol, False) or  # New candle received (original logic)
+        len(klines_data.get(symbol, [])) > 30      # OR sufficient historical data available
+    )
+    
+    if not should_process:
         return
     
-    new_candle_received[symbol] = False
+    # Reset the new candle flag if it was set
+    if new_candle_received.get(symbol, False):
+        new_candle_received[symbol] = False
     
-    logger.info(f"Checking for trading signals for {symbol}")
+    logger.info(f"Checking for trading signals for {symbol} (Fast Mode)")
     
     try:
         klines = klines_data.get(symbol, [])
@@ -2055,7 +2065,7 @@ def main():
     parser.add_argument('--timeframe', type=str, default=TIMEFRAME, help='Timeframe for trading (e.g. 1m, 5m, 15m, 1h)')
     parser.add_argument('--strategy', type=str, default=STRATEGY, help='Strategy for backtest')
     parser.add_argument('--report', action='store_true', help='Generate performance report only')
-    parser.add_argument('--interval', type=int, default=5, help='Trading check interval in minutes')
+    parser.add_argument('--interval', type=int, default=1, help='Trading check interval in minutes')
     parser.add_argument('--skip-validation', action='store_true', help='Skip strategy validation before live trading')
     parser.add_argument('--skip-test-trade', action='store_true', help='Skip test trade before live trading')
     parser.add_argument('--small-account', action='store_true', help='Run with small account (under $45) - skips test trade and uses adjusted risk')
@@ -2205,7 +2215,13 @@ def main():
                             f"Starting Balance: {stats['current_balance']:.2f} USDT")
     
     # Main trading loop
-    check_interval = args.interval * 60  # Convert to seconds
+    if FAST_TRADING_MODE:
+        check_interval = FAST_CHECK_INTERVAL  # Use faster interval (30 seconds)
+        logger.info(f"🚀 FAST TRADING MODE enabled - checking every {check_interval} seconds")
+    else:
+        check_interval = args.interval * 60  # Convert to seconds
+        logger.info(f"Standard trading mode - checking every {check_interval} seconds")
+    
     next_check = time.time()
     next_report = datetime.now().replace(hour=0, minute=0, second=0) + timedelta(days=1)
     last_status_report = time.time() - 7200  # Send status report after first 2 hours

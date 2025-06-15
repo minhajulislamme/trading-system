@@ -94,12 +94,12 @@ MIN_CANDLE_BODY_PCT = float(os.getenv('MIN_CANDLE_BODY_PCT', '0.5'))
 MAX_WICK_RATIO = float(os.getenv('MAX_WICK_RATIO', '3.0'))
 
 # Confluence and confidence parameters
-CONFLUENCE_REQUIRED = int(os.getenv('CONFLUENCE_REQUIRED', '2'))
+CONFLUENCE_REQUIRED = int(os.getenv('CONFLUENCE_REQUIRED', '1'))
 BASE_POSITION_PCT = float(os.getenv('BASE_POSITION_PCT', '0.3'))  # 30% base position
 MAX_POSITION_PCT = float(os.getenv('MAX_POSITION_PCT', '0.5'))    # 50% max position
 CONFIDENCE_MULTIPLIER = float(os.getenv('CONFIDENCE_MULTIPLIER', '1.5'))
 
-TIMEFRAME = os.getenv('TIMEFRAME', '15m')
+TIMEFRAME = os.getenv('TIMEFRAME', '5m')
 
 # Risk management - Enhanced stop loss settings
 USE_STOP_LOSS = os.getenv('USE_STOP_LOSS', 'True').lower() == 'true'
@@ -129,6 +129,11 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
 SEND_DAILY_REPORT = os.getenv('SEND_DAILY_REPORT', 'True').lower() == 'true'
 DAILY_REPORT_TIME = os.getenv('DAILY_REPORT_TIME', '00:00')  # 24-hour format
+
+# Fast trading mode configuration
+FAST_TRADING_MODE = os.getenv('FAST_TRADING_MODE', 'True').lower() == 'true'
+FAST_CHECK_INTERVAL = int(os.getenv('FAST_CHECK_INTERVAL', '30'))  # 30 seconds in fast mode
+ENABLE_QUICK_SIGNALS = os.getenv('ENABLE_QUICK_SIGNALS', 'True').lower() == 'true'
 
 # Other settings
 RETRY_COUNT = int(os.getenv('RETRY_COUNT', '3'))
