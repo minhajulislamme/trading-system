@@ -15,6 +15,37 @@ from modules.config import (
 
 logger = logging.getLogger(__name__)
 
+# Helper functions
+def get_step_size(min_qty_str):
+    """Extract step size from min quantity string"""
+    step_size = min_qty_str
+    if isinstance(step_size, str):
+        try:
+            step_size = float(step_size)
+        except ValueError:
+            return 0.001  # Default step size
+    
+    if step_size == 0:
+        return 0.001  # Default step size
+    
+    return step_size
+
+def round_step_size(quantity, step_size):
+    """Round quantity to valid step size"""
+    if step_size == 0:
+        return quantity
+        
+    precision = int(round(-math.log10(step_size)))
+    if precision < 0:
+        precision = 0
+    rounded = math.floor(quantity * 10**precision) / 10**precision
+    
+    # Ensure it's at least the step size
+    if rounded < step_size:
+        rounded = step_size
+        
+    return rounded
+
 class RiskManager:
     def __init__(self, binance_client):
         """Initialize risk manager with a reference to binance client"""
@@ -23,6 +54,10 @@ class RiskManager:
         self.initial_balance = None
         self.last_balance = None
         self.position_size_multiplier = 1.0  # Default position size multiplier
+        
+        # Performance tracking for dynamic compounding
+        self.recent_trades = []  # Store recent trade results
+        self.compound_adjustment_factor = 1.0  # Dynamic adjustment to compounding rate
         
     def calculate_position_size(self, symbol, side, price, stop_loss_price=None):
         """
@@ -484,34 +519,83 @@ class RiskManager:
         logger.debug(f"Margin check passed: Required {required_margin:.4f} USDT, Available {max_safe_margin:.4f} USDT")
         return True
 
-
-# Helper functions
-def get_step_size(min_qty_str):
-    """Extract step size from min quantity string"""
-    step_size = min_qty_str
-    if isinstance(step_size, str):
-        try:
-            step_size = float(step_size)
-        except ValueError:
-            return 0.001  # Default step size
-    
-    if step_size == 0:
-        return 0.001  # Default step size
-    
-    return step_size
-
-def round_step_size(quantity, step_size):
-    """Round quantity to valid step size"""
-    if step_size == 0:
-        return quantity
+    def update_trade_performance(self, trade_result):
+        """
+        Update recent trade performance for dynamic compounding adjustments
         
-    precision = int(round(-math.log10(step_size)))
-    if precision < 0:
-        precision = 0
-    rounded = math.floor(quantity * 10**precision) / 10**precision
-    
-    # Ensure it's at least the step size
-    if rounded < step_size:
-        rounded = step_size
+        Args:
+            trade_result: Dict with trade info including 'profit_pct', 'timestamp', 'won'
+        """
+        from modules.config import COMPOUND_PERFORMANCE_WINDOW
         
-    return rounded
+        # Add trade to recent trades
+        self.recent_trades.append({
+            'timestamp': time.time(),
+            'profit_pct': trade_result.get('profit_pct', 0),
+            'won': trade_result.get('won', False)
+        })
+        
+        # Keep only recent trades within the performance window
+        cutoff_time = time.time() - (COMPOUND_PERFORMANCE_WINDOW * 24 * 3600)  # Convert days to seconds
+        self.recent_trades = [t for t in self.recent_trades if t['timestamp'] > cutoff_time]
+        
+        # Update compound adjustment factor
+        self._calculate_compound_adjustment()
+        
+    def _calculate_compound_adjustment(self):
+        """Calculate dynamic adjustment factor for compounding based on recent performance"""
+        from modules.config import (
+            COMPOUND_MIN_WIN_RATE, COMPOUND_MAX_DRAWDOWN, COMPOUND_SCALING_FACTOR
+        )
+        
+        if len(self.recent_trades) < 5:  # Need at least 5 trades for meaningful analysis
+            self.compound_adjustment_factor = 1.0
+            return
+            
+        # Calculate win rate
+        wins = sum(1 for trade in self.recent_trades if trade['won'])
+        win_rate = wins / len(self.recent_trades)
+        
+        # Calculate current drawdown
+        profits = [trade['profit_pct'] for trade in self.recent_trades]
+        cumulative_return = sum(profits)
+        peak_return = 0
+        current_drawdown = 0
+        
+        running_return = 0
+        for profit in profits:
+            running_return += profit
+            if running_return > peak_return:
+                peak_return = running_return
+            current_drawdown = max(current_drawdown, peak_return - running_return)
+        
+        current_drawdown_pct = current_drawdown / 100  # Convert to decimal
+        
+        # Adjust compounding based on performance
+        adjustment = 1.0
+        
+        # Reduce compounding if win rate is too low
+        if win_rate < COMPOUND_MIN_WIN_RATE:
+            adjustment *= COMPOUND_SCALING_FACTOR
+            logger.info(f"Reducing compounding due to low win rate: {win_rate:.2%} < {COMPOUND_MIN_WIN_RATE:.2%}")
+        
+        # Reduce compounding if drawdown is too high
+        if current_drawdown_pct > COMPOUND_MAX_DRAWDOWN:
+            adjustment *= COMPOUND_SCALING_FACTOR
+            logger.info(f"Reducing compounding due to high drawdown: {current_drawdown_pct:.2%} > {COMPOUND_MAX_DRAWDOWN:.2%}")
+        
+        self.compound_adjustment_factor = adjustment
+        logger.debug(f"Compound adjustment factor: {adjustment:.2f} (Win rate: {win_rate:.2%}, Drawdown: {current_drawdown_pct:.2%})")
+
+    def get_dynamic_compound_rate(self):
+        """Get the current compound reinvestment rate adjusted for performance"""
+        from modules.config import COMPOUND_REINVEST_PERCENT
+        
+        base_rate = COMPOUND_REINVEST_PERCENT
+        adjusted_rate = base_rate * self.compound_adjustment_factor
+        
+        # Ensure it stays within reasonable bounds (10% to 75%)
+        adjusted_rate = max(0.10, min(0.75, adjusted_rate))
+        
+        logger.debug(f"Dynamic compound rate: {adjusted_rate:.2%} (base: {base_rate:.2%}, adjustment: {self.compound_adjustment_factor:.2f})")
+        return adjusted_rate

@@ -33,7 +33,7 @@ STRATEGY = os.getenv('STRATEGY', 'SmartTrendCatcher')
 
 # Position sizing - Enhanced risk management (aligned with SmartTrendCatcher)
 INITIAL_BALANCE = float(os.getenv('INITIAL_BALANCE', '50.0'))
-FIXED_TRADE_PERCENTAGE = float(os.getenv('FIXED_TRADE_PERCENTAGE', '0.30'))  # 30% to match strategy BASE_POSITION_PCT
+FIXED_TRADE_PERCENTAGE = float(os.getenv('FIXED_TRADE_PERCENTAGE', '0.30'))  # 30% to match strategy base_position_pct
 MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '3'))  # Conservative for better risk management
 
 # Margin safety settings - More conservative
@@ -43,37 +43,43 @@ MIN_FREE_BALANCE_PCT = float(os.getenv('MIN_FREE_BALANCE_PCT', '0.10'))  # Keep 
 
 # Multi-instance configuration for running separate bot instances per trading pair
 MULTI_INSTANCE_MODE = os.getenv('MULTI_INSTANCE_MODE', 'True').lower() == 'true'
-MAX_POSITIONS_PER_SYMBOL = int(os.getenv('MAX_POSITIONS_PER_SYMBOL', '3'))
+MAX_POSITIONS_PER_SYMBOL = int(os.getenv('MAX_POSITIONS_PER_SYMBOL', '3'))  # Updated to match .env
 
-# Auto-compounding settings
+# Auto-compounding settings - Enhanced with performance-based adjustments
 AUTO_COMPOUND = os.getenv('AUTO_COMPOUND', 'True').lower() == 'true'
 COMPOUND_REINVEST_PERCENT = float(os.getenv('COMPOUND_REINVEST_PERCENT', '0.75'))
 COMPOUND_INTERVAL = os.getenv('COMPOUND_INTERVAL', 'DAILY')
 
+# Dynamic compounding adjustments
+COMPOUND_PERFORMANCE_WINDOW = int(os.getenv('COMPOUND_PERFORMANCE_WINDOW', '7'))  # Look back 7 days
+COMPOUND_MIN_WIN_RATE = float(os.getenv('COMPOUND_MIN_WIN_RATE', '0.6'))  # Require 60% win rate
+COMPOUND_MAX_DRAWDOWN = float(os.getenv('COMPOUND_MAX_DRAWDOWN', '0.15'))  # Pause if >15% drawdown
+COMPOUND_SCALING_FACTOR = float(os.getenv('COMPOUND_SCALING_FACTOR', '0.5'))  # Reduce compounding if performance poor
+
 # Technical indicator parameters - SmartTrendCatcher Strategy (RSI removed)
 
 # EMA parameters
-EMA_TREND = int(os.getenv('EMA_TREND', '50'))
-EMA_FAST = int(os.getenv('EMA_FAST', '21'))
-FAST_EMA = int(os.getenv('FAST_EMA', '8'))  # Used by SmartTrendCatcher
-SLOW_EMA = int(os.getenv('SLOW_EMA', '21'))  # Used by SmartTrendCatcher
+EMA_TREND = int(os.getenv('EMA_TREND', '50'))  # Updated to match SmartTrendCatcher ema_slow default
+EMA_FAST = int(os.getenv('EMA_FAST', '21'))    # Updated to match SmartTrendCatcher ema_fast default
+FAST_EMA = int(os.getenv('FAST_EMA', '8'))     # Used by SmartTrendCatcher
+SLOW_EMA = int(os.getenv('SLOW_EMA', '21'))    # Used by SmartTrendCatcher
 
 # MACD parameters
-MACD_FAST = int(os.getenv('MACD_FAST', '12'))
-MACD_SLOW = int(os.getenv('MACD_SLOW', '26'))
-MACD_SIGNAL = int(os.getenv('MACD_SIGNAL', '9'))
+MACD_FAST = int(os.getenv('MACD_FAST', '12'))    # Updated to match SmartTrendCatcher default
+MACD_SLOW = int(os.getenv('MACD_SLOW', '26'))    # Updated to match SmartTrendCatcher default
+MACD_SIGNAL = int(os.getenv('MACD_SIGNAL', '9')) # Updated to match SmartTrendCatcher default
 MACD_HISTOGRAM_THRESHOLD = float(os.getenv('MACD_HISTOGRAM_THRESHOLD', '0.0001'))
 
 # Volume filter parameters
 VOLUME_FILTER_ENABLED = os.getenv('VOLUME_FILTER_ENABLED', 'True').lower() == 'true'
 VOLUME_PERIOD = int(os.getenv('VOLUME_PERIOD', '20'))  # Optimized for 15m
-VOLUME_MULTIPLIER = float(os.getenv('VOLUME_MULTIPLIER', '1.2'))
+VOLUME_MULTIPLIER = float(os.getenv('VOLUME_MULTIPLIER', '1.5'))  # Updated to match SmartTrendCatcher default
 VOLUME_SURGE_MULTIPLIER = float(os.getenv('VOLUME_SURGE_MULTIPLIER', '2.0'))
 
 # ATR (Average True Range) parameters
 ATR_FILTER_ENABLED = os.getenv('ATR_FILTER_ENABLED', 'True').lower() == 'true'
 ATR_PERIOD = int(os.getenv('ATR_PERIOD', '14'))  # Optimized for 15m
-ATR_THRESHOLD = float(os.getenv('ATR_THRESHOLD', '0.6'))  # Adjusted for 15m
+ATR_THRESHOLD = float(os.getenv('ATR_THRESHOLD', '0.8'))  # Updated to match SmartTrendCatcher default
 ATR_TREND_FACTOR = float(os.getenv('ATR_TREND_FACTOR', '1.2'))
 
 # Bollinger Bands parameters
@@ -87,8 +93,8 @@ MAX_WICK_RATIO = float(os.getenv('MAX_WICK_RATIO', '3.0'))
 
 # Confluence and confidence parameters
 CONFLUENCE_REQUIRED = int(os.getenv('CONFLUENCE_REQUIRED', '2'))  # Changed default from 1 to 2
-BASE_POSITION_PCT = float(os.getenv('BASE_POSITION_PCT', '0.3'))  # 30% base position
-MAX_POSITION_PCT = float(os.getenv('MAX_POSITION_PCT', '0.5'))    # 50% max position
+BASE_POSITION_PCT = float(os.getenv('BASE_POSITION_PCT', '0.30'))  # 30% base position (matches SmartTrendCatcher)
+MAX_POSITION_PCT = float(os.getenv('MAX_POSITION_PCT', '0.50'))    # 50% max position
 CONFIDENCE_MULTIPLIER = float(os.getenv('CONFIDENCE_MULTIPLIER', '1.5'))
 
 TIMEFRAME = os.getenv('TIMEFRAME', '15m')
@@ -104,7 +110,7 @@ BACKTEST_START_DATE = os.getenv('BACKTEST_START_DATE', '2023-01-01')
 BACKTEST_END_DATE = os.getenv('BACKTEST_END_DATE', '')
 BACKTEST_INITIAL_BALANCE = float(os.getenv('BACKTEST_INITIAL_BALANCE', '50.0'))
 BACKTEST_COMMISSION = float(os.getenv('BACKTEST_COMMISSION', '0.0004'))
-BACKTEST_USE_AUTO_COMPOUND = os.getenv('BACKTEST_USE_AUTO_COMPOUND', 'False').lower() == 'true'  # Disabled for now
+BACKTEST_USE_AUTO_COMPOUND = os.getenv('BACKTEST_USE_AUTO_COMPOUND', 'True').lower() == 'true'  # Enabled for enhanced auto-compounding test
 
 # Enhanced validation requirements - More realistic for 90-day backtests
 BACKTEST_BEFORE_LIVE = os.getenv('BACKTEST_BEFORE_LIVE', 'True').lower() == 'true'
