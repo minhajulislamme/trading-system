@@ -41,58 +41,58 @@ class TradingStrategy:
 
 class SmartTrendCatcher(TradingStrategy):
     """
-    EMA Crossover Strategy with Enhanced Signal Filtering:
+    EMA Crossover Strategy with Enhanced Signal Filtering (9/26 EMA):
     
     Core Strategy:
-    - EMA crossover as primary signal generation
-    - Fast EMA crosses above/below slow EMA for entries
+    - EMA crossover as primary signal generation (9 EMA vs 26 EMA)
+    - Fast EMA (9) crosses above/below slow EMA (26) for entries
     - Enhanced volume and volatility filtering
     - MACD confirmation for better signal quality
     
     Signal Generation:
-    - BUY: Fast EMA crosses above slow EMA with confirmations
-    - SELL: Fast EMA crosses below slow EMA with confirmations
+    - BUY: 9 EMA crosses above 26 EMA with confirmations
+    - SELL: 9 EMA crosses below 26 EMA with confirmations
     - Additional filters to reduce false signals
     """
     
     def __init__(self, 
-                 # EMA crossover parameters
-                 ema_slow=50,               # Slow EMA for crossover
-                 ema_fast=21,               # Fast EMA for crossover
+                 # EMA crossover parameters based on chart analysis
+                 ema_slow=26,               # Slow EMA matching MACD slow (26 period)
+                 ema_fast=9,                # Fast EMA for crossover (9 period)
                  
-                 # MACD parameters with confirmation
+                 # MACD parameters matching the chart configuration
                  macd_fast=12,
                  macd_slow=26,
                  macd_signal=9,
-                 macd_histogram_threshold=0.0001,  # Minimum histogram value for signal
+                 macd_histogram_threshold=0.00001,  # Very sensitive threshold for MACD histogram
                  
-                 # Enhanced false signal reduction
+                 # Enhanced false signal reduction (optimized for chart patterns)
                  volume_filter_enabled=True,
                  volume_period=20,
-                 volume_multiplier=1.5,     # Stricter volume requirement
-                 volume_surge_multiplier=2.0,  # Volume surge detection
+                 volume_multiplier=1.2,     # More lenient for trend continuation
+                 volume_surge_multiplier=1.6,  # Lower threshold for volume surges
                  
                  atr_filter_enabled=True,
                  atr_period=14,
-                 atr_threshold=0.8,         # Higher volatility requirement
-                 atr_trend_factor=1.2,      # ATR trend confirmation
+                 atr_threshold=0.5,         # Lower volatility requirement for more signals
+                 atr_trend_factor=1.0,      # More responsive ATR trend confirmation
                  
                  # Bollinger Bands for volatility confirmation
                  bb_period=20,
                  bb_std=2.0,
-                 bb_squeeze_threshold=0.1,  # Detect low volatility periods
+                 bb_squeeze_threshold=0.08,  # Slightly lower for more breakout signals
                  
-                 # Price action filters
-                 min_candle_body_pct=0.5,   # Minimum candle body size
-                 max_wick_ratio=3.0,        # Maximum wick to body ratio
+                 # Price action filters (more lenient for trending markets)
+                 min_candle_body_pct=0.4,   # Lower minimum candle body size
+                 max_wick_ratio=3.5,        # Allow slightly more wick ratio
                  
                  # Advanced filtering parameters
                  confluence_required=2,      # Number of confirmations needed
                  
-                 # Dynamic position sizing
-                 base_position_pct=0.3,     # Base position size (30% instead of 75%)
-                 max_position_pct=0.5,      # Maximum position size
-                 confidence_multiplier=1.5): # Multiply position size by confidence
+                 # Dynamic position sizing (more aggressive for trending)
+                 base_position_pct=0.35,     # Slightly larger base position
+                 max_position_pct=0.6,      # Higher maximum position size
+                 confidence_multiplier=1.4): # Confidence multiplier
         
         super().__init__("SmartTrendCatcher")
         
@@ -105,8 +105,8 @@ class SmartTrendCatcher(TradingStrategy):
             raise ValueError("Invalid MACD parameters")
         if not (0 < base_position_pct <= max_position_pct <= 1.0):
             raise ValueError("Invalid position sizing parameters")
-        if confluence_required < 1:
-            raise ValueError("Confluence required must be at least 1")
+        if confluence_required < 0:
+            raise ValueError("Confluence required must be at least 0")
         
         # Store enhanced parameters
         self.ema_slow = ema_slow

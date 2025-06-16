@@ -56,46 +56,44 @@ COMPOUND_MIN_WIN_RATE = float(os.getenv('COMPOUND_MIN_WIN_RATE', '0.6'))  # Requ
 COMPOUND_MAX_DRAWDOWN = float(os.getenv('COMPOUND_MAX_DRAWDOWN', '0.15'))  # Pause if >15% drawdown
 COMPOUND_SCALING_FACTOR = float(os.getenv('COMPOUND_SCALING_FACTOR', '0.5'))  # Reduce compounding if performance poor
 
-# Technical indicator parameters - SmartTrendCatcher Strategy (RSI removed)
+# Technical indicator parameters - SmartTrendCatcher Strategy (EMA 9/26 + MACD Configuration)
 
-# EMA parameters
-EMA_TREND = int(os.getenv('EMA_TREND', '50'))  # Updated to match SmartTrendCatcher ema_slow default
-EMA_FAST = int(os.getenv('EMA_FAST', '21'))    # Updated to match SmartTrendCatcher ema_fast default
-FAST_EMA = int(os.getenv('FAST_EMA', '8'))     # Used by SmartTrendCatcher
-SLOW_EMA = int(os.getenv('SLOW_EMA', '21'))    # Used by SmartTrendCatcher
+# EMA parameters (matching chart configuration - EMA 9/26)
+FAST_EMA = int(os.getenv('FAST_EMA', '9'))     # Fast EMA matching chart (was 8)
+SLOW_EMA = int(os.getenv('SLOW_EMA', '26'))    # Slow EMA matching MACD slow period (was 21)
 
-# MACD parameters
-MACD_FAST = int(os.getenv('MACD_FAST', '12'))    # Updated to match SmartTrendCatcher default
-MACD_SLOW = int(os.getenv('MACD_SLOW', '26'))    # Updated to match SmartTrendCatcher default
-MACD_SIGNAL = int(os.getenv('MACD_SIGNAL', '9')) # Updated to match SmartTrendCatcher default
-MACD_HISTOGRAM_THRESHOLD = float(os.getenv('MACD_HISTOGRAM_THRESHOLD', '0.0001'))
+# MACD parameters (matching chart configuration - 12,26,9)
+MACD_FAST = int(os.getenv('MACD_FAST', '12'))    # Matches chart MACD fast
+MACD_SLOW = int(os.getenv('MACD_SLOW', '26'))    # Matches chart MACD slow
+MACD_SIGNAL = int(os.getenv('MACD_SIGNAL', '9')) # Matches chart MACD signal
+MACD_HISTOGRAM_THRESHOLD = float(os.getenv('MACD_HISTOGRAM_THRESHOLD', '0.00001'))  # Very sensitive threshold
 
-# Volume filter parameters
+# Volume filter parameters (optimized for chart patterns)
 VOLUME_FILTER_ENABLED = os.getenv('VOLUME_FILTER_ENABLED', 'True').lower() == 'true'
-VOLUME_PERIOD = int(os.getenv('VOLUME_PERIOD', '20'))  # Optimized for 15m
-VOLUME_MULTIPLIER = float(os.getenv('VOLUME_MULTIPLIER', '1.5'))  # Updated to match SmartTrendCatcher default
-VOLUME_SURGE_MULTIPLIER = float(os.getenv('VOLUME_SURGE_MULTIPLIER', '2.0'))
+VOLUME_PERIOD = int(os.getenv('VOLUME_PERIOD', '20'))  # Standard volume period
+VOLUME_MULTIPLIER = float(os.getenv('VOLUME_MULTIPLIER', '1.2'))  # More lenient for trend continuation (was 1.5)
+VOLUME_SURGE_MULTIPLIER = float(os.getenv('VOLUME_SURGE_MULTIPLIER', '1.6'))  # Lower threshold (was 2.0)
 
-# ATR (Average True Range) parameters
+# ATR (Average True Range) parameters (optimized for chart volatility)
 ATR_FILTER_ENABLED = os.getenv('ATR_FILTER_ENABLED', 'True').lower() == 'true'
-ATR_PERIOD = int(os.getenv('ATR_PERIOD', '14'))  # Optimized for 15m
-ATR_THRESHOLD = float(os.getenv('ATR_THRESHOLD', '0.8'))  # Updated to match SmartTrendCatcher default
-ATR_TREND_FACTOR = float(os.getenv('ATR_TREND_FACTOR', '1.2'))
+ATR_PERIOD = int(os.getenv('ATR_PERIOD', '14'))  # Standard ATR period
+ATR_THRESHOLD = float(os.getenv('ATR_THRESHOLD', '0.5'))  # Lower threshold for more signals (was 0.8)
+ATR_TREND_FACTOR = float(os.getenv('ATR_TREND_FACTOR', '1.0'))  # More responsive (was 1.2)
 
-# Bollinger Bands parameters
-BB_PERIOD = int(os.getenv('BB_PERIOD', '20'))  # Optimized for 15m
+# Bollinger Bands parameters (optimized for trending breakouts)
+BB_PERIOD = int(os.getenv('BB_PERIOD', '20'))  # Standard BB period
 BB_STD = float(os.getenv('BB_STD', '2.0'))
-BB_SQUEEZE_THRESHOLD = float(os.getenv('BB_SQUEEZE_THRESHOLD', '0.1'))
+BB_SQUEEZE_THRESHOLD = float(os.getenv('BB_SQUEEZE_THRESHOLD', '0.08'))  # Lower for more breakout signals (was 0.1)
 
-# Price action parameters
-MIN_CANDLE_BODY_PCT = float(os.getenv('MIN_CANDLE_BODY_PCT', '0.5'))
-MAX_WICK_RATIO = float(os.getenv('MAX_WICK_RATIO', '3.0'))
+# Price action parameters (optimized for trending markets)
+MIN_CANDLE_BODY_PCT = float(os.getenv('MIN_CANDLE_BODY_PCT', '0.4'))  # Lower for more signals (was 0.5)
+MAX_WICK_RATIO = float(os.getenv('MAX_WICK_RATIO', '3.5'))  # Allow more wick ratio (was 3.0)
 
-# Confluence and confidence parameters
-CONFLUENCE_REQUIRED = int(os.getenv('CONFLUENCE_REQUIRED', '2'))  # Changed default from 1 to 2
-BASE_POSITION_PCT = float(os.getenv('BASE_POSITION_PCT', '0.30'))  # 30% base position (matches SmartTrendCatcher)
-MAX_POSITION_PCT = float(os.getenv('MAX_POSITION_PCT', '0.50'))    # 50% max position
-CONFIDENCE_MULTIPLIER = float(os.getenv('CONFIDENCE_MULTIPLIER', '1.5'))
+# Confluence and confidence parameters (aligned with chart configuration)
+CONFLUENCE_REQUIRED = int(os.getenv('CONFLUENCE_REQUIRED', '0'))  # Set to 0 as requested
+BASE_POSITION_PCT = float(os.getenv('BASE_POSITION_PCT', '0.35'))  # Larger base position (was 0.30)
+MAX_POSITION_PCT = float(os.getenv('MAX_POSITION_PCT', '0.60'))    # Higher max position (was 0.50)
+CONFIDENCE_MULTIPLIER = float(os.getenv('CONFIDENCE_MULTIPLIER', '1.4'))  # More conservative (was 1.5)
 
 TIMEFRAME = os.getenv('TIMEFRAME', '15m')
 
